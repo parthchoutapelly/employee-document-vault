@@ -103,8 +103,6 @@ Resources:
   # ---------------------------------------------------------------------
   DocumentsBucket:
     Type: AWS::S3::Bucket
-    DependsOn:
-      - AccessLogsBucketPolicy
     Properties:
       BucketName: !Sub "docvault-employee-documents-${Env}-${AWS::AccountId}"
       PublicAccessBlockConfiguration:

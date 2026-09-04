@@ -1,0 +1,139 @@
+# Architecture Overview — Employee Document Vault
+
+## Purpose
+
+The Employee Document Vault is a serverless, cloud-native HR document management
+system hosted on AWS. It provides secure upload, storage, retrieval, and audit
+logging of sensitive employee documents (offer letters, ID proofs, payslips,
+appraisals, etc.).
+
+---
+
+## User Roles
+
+| Role | Description |
+|---|---|
+| **Employee** | Can upload and view their own documents |
+| **Manager** | Can view documents for employees in their team |
+| **HR Admin** | Full access: upload, view, delete, and export audit logs |
+
+---
+
+## High-Level Data Flow
+
+```
+┌────────────┐  ┌─────────────┐  ┌──────────────┐
+│  Employee  │  │   Manager   │  │   HR Admin   │
+└─────┬──────┘  └──────┬──────┘  └──────┬───────┘
+      │                │                │
+      └────────────────┴────────────────┘
+                       │
+                       ▼
+              ┌─────────────────┐
+              │  Amazon Cognito │  ← Authentication & JWT issuance
+              │  (User Pools)   │     Role claims: Employee / Manager / HR_Admin
+              └────────┬────────┘
+                       │  Bearer token (JWT)
+                       ▼
+              ┌─────────────────┐
+              │  API Gateway    │  ← HTTPS endpoint, Cognito authorizer
+              │  (REST API)     │     validates JWT on every request
+              └────────┬────────┘
+                       │  Proxied event
+                       ▼
+              ┌─────────────────┐
+              │  AWS Lambda     │  ← Business logic
+              │  (Python/Node)  │     - Access-control enforcement
+              └────────┬────────┘     - Pre-signed URL generation
+                       │              - Audit log writes
+               ┌───────┴────────┐
+               │                │
+               ▼                ▼
+   ┌────────────────────┐  ┌──────────────────────┐
+   │  Amazon S3         │  │  Amazon DynamoDB      │
+   │  (two buckets)     │  │  (two tables)         │
+   └────────────────────┘  └──────────────────────┘
+```
+
+---
+
+## Component Descriptions
+
+### Amazon Cognito (User Pool)
+- Manages authentication for all three user roles.
+- Issues short-lived JWT tokens containing role claims.
+- API Gateway uses the Cognito authorizer to validate tokens without Lambda cold-start overhead.
+
+### API Gateway (REST API)
+- Single HTTPS entry point for all clients (web frontend, CLI tools).
+- Routes: `POST /documents`, `GET /documents/{id}`, `GET /employees/{id}/documents`, `GET /audit-log`, etc.
+- Throttling and usage plans applied per environment.
+
+### AWS Lambda
+- Stateless function(s) implementing business logic.
+- Enforces role-based access control (RBAC) beyond what Cognito provides.
+- Generates **pre-signed S3 URLs** for direct, time-limited browser uploads/downloads (avoids routing large files through Lambda).
+- Writes every significant action to the `AuditLog` DynamoDB table.
+
+### Amazon S3 — Two-Bucket Design
+
+The system uses **two separate S3 buckets** to comply with AWS best-practice
+guidance that a bucket must not log to itself:
+
+| Bucket | Name pattern | Purpose |
+|---|---|---|
+| **Documents bucket** | `docvault-employee-documents-<env>-<account_id>` | Stores all employee HR documents |
+| **Access-logs bucket** | `docvault-access-logs-<env>-<account_id>` | Receives S3 server access logs from the documents bucket |
+
+**Documents bucket features:**
+- Private (all public access blocked)
+- SSE-KMS encryption via a dedicated KMS key (`alias/docvault-<env>`)
+- Versioning enabled (protects against accidental deletion/overwrites)
+- Noncurrent-version lifecycle: transition to S3 Standard-IA after 90 days
+- HTTPS-only enforced via bucket policy
+
+**Access-logs bucket features:**
+- Private (all public access blocked)
+- `ObjectOwnership: BucketOwnerPreferred` (required for log delivery)
+- HTTPS-only enforced via bucket policy
+
+**S3 key structure:**
+```
+documents/{employee_id}/{document_type}/{filename}
+```
+
+### Amazon DynamoDB
+
+| Table | Partition Key | Sort Key | Purpose |
+|---|---|---|---|
+| `Documents-<env>` | `document_id` (S) | — | Document metadata + GSI on `employee_id` / `upload_timestamp` |
+| `AuditLog-<env>` | `log_id` (S) | `timestamp` (N) | Append-only audit trail of all actions |
+
+Both tables use on-demand billing, AWS-managed SSE, and point-in-time recovery.
+
+### AWS KMS
+- One KMS key per environment (`alias/docvault-<env>`) provides SSE-KMS for the documents bucket.
+- Key rotation is enabled by default.
+
+---
+
+## Security Controls Summary
+
+| Layer | Control |
+|---|---|
+| Transport | HTTPS enforced at API Gateway and via S3 bucket policies (`aws:SecureTransport`) |
+| Authentication | Amazon Cognito User Pool JWTs |
+| Authorization | Cognito authorizer on API Gateway + Lambda RBAC |
+| Encryption at rest | SSE-KMS (documents bucket), SSE-S3 (DynamoDB) |
+| Audit | Append-only DynamoDB `AuditLog` table + S3 server access logs |
+| Versioning | S3 versioning protects against accidental overwrites/deletes |
+| Recovery | DynamoDB PITR enabled on both tables |
+
+---
+
+## Future Phases (not yet implemented)
+
+- **Phase 2:** Lambda functions, API Gateway, and Cognito User Pool resources added to the SAM template.
+- **Phase 3:** Frontend (React/Vue) hosted on S3 + CloudFront.
+- **Phase 4:** CI/CD pipeline (GitHub Actions → AWS SAM deploy).
+- **Phase 5:** Audit log export to S3 (scheduled Lambda) and security architecture diagram.

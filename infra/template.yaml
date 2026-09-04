@@ -1,0 +1,222 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Employee Document Vault - Phase 1 (Storage Layer)
+  Private S3 document storage + dedicated access-log bucket +
+  DynamoDB metadata and audit logging.
+
+Parameters:
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment environment, used in resource naming.
+
+Resources:
+
+  # ---------------------------------------------------------------------
+  # KMS key for S3 default encryption (SSE-KMS)
+  # ---------------------------------------------------------------------
+  DocVaultKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS key for docvault-employee-documents-${Env}"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccountAdmin
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+
+  DocVaultKmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/docvault-${Env}"
+      TargetKeyId: !Ref DocVaultKmsKey
+
+  # ---------------------------------------------------------------------
+  # S3 access-log bucket
+  # Kept separate from the employee document bucket.
+  # ---------------------------------------------------------------------
+  AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "docvault-access-logs-${Env}-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      Tags:
+        - Key: Project
+          Value: employee-document-vault
+        - Key: Environment
+          Value: !Ref Env
+        - Key: Purpose
+          Value: s3-access-logs
+
+  AccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub "arn:aws:s3:::${AccessLogsBucket}"
+              - !Sub "arn:aws:s3:::${AccessLogsBucket}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+
+  # ---------------------------------------------------------------------
+  # S3 bucket:
+  # /documents/{employee_id}/{document_type}/{filename}
+  # ---------------------------------------------------------------------
+  DocumentsBucket:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - AccessLogsBucketPolicy
+    Properties:
+      BucketName: !Sub "docvault-employee-documents-${Env}-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref DocVaultKmsKey
+            BucketKeyEnabled: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionNoncurrentVersions
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 90
+      LoggingConfiguration:
+        LogFilePrefix: access-logs/
+        DestinationBucketName: !Ref AccessLogsBucket
+      Tags:
+        - Key: Project
+          Value: employee-document-vault
+        - Key: Environment
+          Value: !Ref Env
+
+  # Enforce HTTPS-only access (aws:SecureTransport)
+  DocumentsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DocumentsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub "arn:aws:s3:::${DocumentsBucket}"
+              - !Sub "arn:aws:s3:::${DocumentsBucket}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+
+  # ---------------------------------------------------------------------
+  # DynamoDB: Documents metadata table
+  # ---------------------------------------------------------------------
+  DocumentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "Documents-${Env}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: document_id
+          AttributeType: S
+        - AttributeName: employee_id
+          AttributeType: S
+        - AttributeName: upload_timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: document_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: employee_id-index
+          KeySchema:
+            - AttributeName: employee_id
+              KeyType: HASH
+            - AttributeName: upload_timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  # ---------------------------------------------------------------------
+  # DynamoDB: AuditLog table (append-only at the application layer)
+  # ---------------------------------------------------------------------
+  AuditLogTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "AuditLog-${Env}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: log_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: log_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+Outputs:
+  DocumentsBucketName:
+    Description: S3 bucket holding employee documents
+    Value: !Ref DocumentsBucket
+
+  AccessLogsBucketName:
+    Description: S3 bucket receiving S3 server access logs
+    Value: !Ref AccessLogsBucket
+
+  DocumentsTableName:
+    Description: DynamoDB table for document metadata
+    Value: !Ref DocumentsTable
+
+  DocumentsTableGsiName:
+    Description: GSI used for "list my files" / "list my team's files" queries
+    Value: employee_id-index
+
+  AuditLogTableName:
+    Description: DynamoDB table for the append-only audit log
+    Value: !Ref AuditLogTable
+
+  KmsKeyId:
+    Description: KMS key used for S3 default encryption
+    Value: !Ref DocVaultKmsKey

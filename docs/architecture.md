@@ -133,7 +133,22 @@ Both tables use on-demand billing, AWS-managed SSE, and point-in-time recovery.
 
 ## Future Phases (not yet implemented)
 
-- **Phase 2:** Lambda functions, API Gateway, and Cognito User Pool resources added to the SAM template.
 - **Phase 3:** Frontend (React/Vue) hosted on S3 + CloudFront.
 - **Phase 4:** CI/CD pipeline (GitHub Actions → AWS SAM deploy).
 - **Phase 5:** Audit log export to S3 (scheduled Lambda) and security architecture diagram.
+
+## Phase 2 — Implemented
+
+Phase 2 added the following to the SAM template and backend:
+
+- **Amazon Cognito User Pool** (`docvault-user-pool-<env>`) — email-based sign-in,
+  `custom:employee_id` attribute, three groups (`Employee`, `Manager`, `HR_Admin`).
+- **Employees DynamoDB table** (`Employees-<env>`) — employee identity and manager
+  relationships; `manager_id-index` GSI for direct-report resolution.
+- **API Gateway REST API** (`docvault-api-<env>`, stage `v1`) — Cognito authorizer
+  declared as the default; no business routes yet (Phase 3).
+- **Centralized auth helper** (`backend/shared/auth.py`) — `checkAccess()` enforces
+  the RBAC matrix and writes `ACCESS_DENIED` audit records (`action="ACCESS_DENIED"`,
+  `result="DENIED"`).
+
+See [docs/auth.md](auth.md) for the full Phase 2 specification.

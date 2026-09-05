@@ -295,3 +295,9 @@ See `backend/shared/auth.py` and [docs/auth.md](../docs/auth.md).
 The `checkAccess(caller, target_employee_id, employees_table, audit_table)` function
 enforces the RBAC matrix and writes an `ACCESS_DENIED` audit record
 (`action="ACCESS_DENIED"`, `result="DENIED"`) to `AuditLog-<env>` on any denial.
+
+### Presigned S3 Upload & KMS Encryption
+
+When uploading documents directly to Amazon S3 via the presigned URL returned by `POST /upload`:
+- The client/browser HTTP PUT request **must** include the header `x-amz-server-side-encryption: aws:kms` when required by the signed request parameters.
+- Omitting required signed headers causes S3 to reject the upload with `403 SignatureDoesNotMatch`.

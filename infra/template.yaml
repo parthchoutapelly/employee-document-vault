@@ -377,6 +377,13 @@ Resources:
       Name: !Sub "docvault-api-${Env}"
       StageName: v1
       TracingEnabled: false
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt DocVaultUserPool.Arn
+            Identity:
+              Header: Authorization
       DefinitionBody:
         openapi: '3.0.1'
         info:
@@ -398,17 +405,223 @@ Resources:
                     statusCode: '200'
                     responseTemplates:
                       application/json: '{"status": "ok"}'
-        components:
-          securitySchemes:
-            CognitoAuthorizer:
-              type: apiKey
-              name: Authorization
-              in: header
-              x-amazon-apigateway-authtype: cognito_user_pools
-              x-amazon-apigateway-authorizer:
-                providerARNs:
-                  - !GetAtt DocVaultUserPool.Arn
-                type: cognito_user_pools
+      Tags:
+        Project: employee-document-vault
+        Environment: !Ref Env
+
+  # =====================================================================
+  # PHASE 3 — Backend Handlers
+  # =====================================================================
+
+  UploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend
+      Handler: handlers.upload.handler
+      Runtime: python3.11
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          DOCUMENTS_TABLE: !Ref DocumentsTable
+          DOCUMENTS_TABLE_GSI: employee_id-index
+          AUDIT_LOG_TABLE: !Ref AuditLogTable
+          EMPLOYEES_TABLE: !Ref EmployeesTable
+          EMPLOYEES_TABLE_GSI: manager_id-index
+          DOCUMENTS_BUCKET: !Ref DocumentsBucket
+          KMS_KEY_ID: !Ref DocVaultKmsKey
+      Policies:
+        - Statement:
+            - Sid: DocumentsMetadataWrite
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt DocumentsTable.Arn
+            - Sid: AuditLogWrite
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt AuditLogTable.Arn
+            - Sid: EmployeesDirectReportsRead
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !GetAtt EmployeesTable.Arn
+                - !Sub "${EmployeesTable.Arn}/index/manager_id-index"
+            - Sid: DocumentsS3Upload
+              Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/*"
+            - Sid: KmsEncrypt
+              Effect: Allow
+              Action:
+                - kms:GenerateDataKey*
+                - kms:Encrypt
+              Resource: !GetAtt DocVaultKmsKey.Arn
+      Events:
+        UploadApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocVaultApi
+            Path: /upload
+            Method: post
+      Tags:
+        Project: employee-document-vault
+        Environment: !Ref Env
+
+  ListFilesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend
+      Handler: handlers.files.handler
+      Runtime: python3.11
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          DOCUMENTS_TABLE: !Ref DocumentsTable
+          DOCUMENTS_TABLE_GSI: employee_id-index
+          AUDIT_LOG_TABLE: !Ref AuditLogTable
+          EMPLOYEES_TABLE: !Ref EmployeesTable
+          EMPLOYEES_TABLE_GSI: manager_id-index
+      Policies:
+        - Statement:
+            - Sid: DocumentsMetadataQuery
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !GetAtt DocumentsTable.Arn
+                - !Sub "${DocumentsTable.Arn}/index/employee_id-index"
+            - Sid: AuditLogWrite
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt AuditLogTable.Arn
+            - Sid: EmployeesDirectReportsRead
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !GetAtt EmployeesTable.Arn
+                - !Sub "${EmployeesTable.Arn}/index/manager_id-index"
+      Events:
+        ListFilesApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocVaultApi
+            Path: /files
+            Method: get
+      Tags:
+        Project: employee-document-vault
+        Environment: !Ref Env
+
+  DownloadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend
+      Handler: handlers.download.handler
+      Runtime: python3.11
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          DOCUMENTS_TABLE: !Ref DocumentsTable
+          DOCUMENTS_TABLE_GSI: employee_id-index
+          AUDIT_LOG_TABLE: !Ref AuditLogTable
+          EMPLOYEES_TABLE: !Ref EmployeesTable
+          EMPLOYEES_TABLE_GSI: manager_id-index
+          DOCUMENTS_BUCKET: !Ref DocumentsBucket
+      Policies:
+        - Statement:
+            - Sid: DocumentsMetadataRead
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt DocumentsTable.Arn
+            - Sid: AuditLogWrite
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt AuditLogTable.Arn
+            - Sid: EmployeesDirectReportsRead
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !GetAtt EmployeesTable.Arn
+                - !Sub "${EmployeesTable.Arn}/index/manager_id-index"
+            - Sid: DocumentsS3Download
+              Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/*"
+            - Sid: KmsDecrypt
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+              Resource: !GetAtt DocVaultKmsKey.Arn
+      Events:
+        DownloadApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocVaultApi
+            Path: /download/{doc_id}
+            Method: get
+      Tags:
+        Project: employee-document-vault
+        Environment: !Ref Env
+
+  DeleteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend
+      Handler: handlers.delete.handler
+      Runtime: python3.11
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          DOCUMENTS_TABLE: !Ref DocumentsTable
+          DOCUMENTS_TABLE_GSI: employee_id-index
+          AUDIT_LOG_TABLE: !Ref AuditLogTable
+          EMPLOYEES_TABLE: !Ref EmployeesTable
+          EMPLOYEES_TABLE_GSI: manager_id-index
+          DOCUMENTS_BUCKET: !Ref DocumentsBucket
+      Policies:
+        - Statement:
+            - Sid: DocumentsMetadataDelete
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt DocumentsTable.Arn
+            - Sid: AuditLogWrite
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt AuditLogTable.Arn
+            - Sid: EmployeesDirectReportsRead
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !GetAtt EmployeesTable.Arn
+                - !Sub "${EmployeesTable.Arn}/index/manager_id-index"
+            - Sid: DocumentsS3Delete
+              Effect: Allow
+              Action:
+                - s3:DeleteObject
+              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/*"
+      Events:
+        DeleteApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocVaultApi
+            Path: /files/{doc_id}
+            Method: delete
       Tags:
         Project: employee-document-vault
         Environment: !Ref Env

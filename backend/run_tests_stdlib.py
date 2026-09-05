@@ -33,15 +33,23 @@ if "boto3" not in sys.modules:
     conditions_stub.Key = _Key
     dynamodb_stub.conditions = conditions_stub
     boto3_stub.dynamodb = dynamodb_stub
+    boto3_stub.resource = MagicMock()
+    boto3_stub.client = MagicMock()
 
     sys.modules["boto3"] = boto3_stub
     sys.modules["boto3.dynamodb"] = dynamodb_stub
     sys.modules["boto3.dynamodb.conditions"] = conditions_stub
 
-# Add backend/ to path so we can import shared.auth
+# Add backend/ to path so we can import shared and handlers
 sys.path.insert(0, os.path.dirname(__file__))
 
 from shared.auth import checkAccess, AccessDeniedError  # noqa: E402
+from shared.tests.test_handlers import (  # noqa: E402
+    TestUploadHandler,
+    TestListFilesHandler,
+    TestDownloadHandler,
+    TestDeleteHandler,
+)
 
 
 def make_caller(employee_id, groups):
@@ -232,7 +240,8 @@ if __name__ == "__main__":
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
     for cls in [TestHRAdmin, TestManager, TestEmployee, TestNoGroup,
-                TestAuditRecord, TestAuditWriteFailure, TestGroupFormats]:
+                TestAuditRecord, TestAuditWriteFailure, TestGroupFormats,
+                TestUploadHandler, TestListFilesHandler, TestDownloadHandler, TestDeleteHandler]:
         suite.addTests(loader.loadTestsFromTestCase(cls))
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)

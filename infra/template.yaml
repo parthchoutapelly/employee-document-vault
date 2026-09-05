@@ -393,6 +393,7 @@ Resources:
           /ping:
             get:
               summary: Unauthenticated infrastructure health probe
+              security: []
               responses:
                 '200':
                   description: Service is reachable
@@ -405,6 +406,66 @@ Resources:
                     statusCode: '200'
                     responseTemplates:
                       application/json: '{"status": "ok"}'
+          /upload:
+            post:
+              summary: Upload employee document
+              security:
+                - CognitoAuthorizer: []
+              responses:
+                default:
+                  description: Default response
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadFunction.Arn}/invocations"
+          /files:
+            get:
+              summary: List accessible files
+              security:
+                - CognitoAuthorizer: []
+              responses:
+                default:
+                  description: Default response
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListFilesFunction.Arn}/invocations"
+          /download/{doc_id}:
+            get:
+              summary: Download document by ID
+              parameters:
+                - name: doc_id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+              security:
+                - CognitoAuthorizer: []
+              responses:
+                default:
+                  description: Default response
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DownloadFunction.Arn}/invocations"
+          /files/{doc_id}:
+            delete:
+              summary: Delete document by ID
+              parameters:
+                - name: doc_id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+              security:
+                - CognitoAuthorizer: []
+              responses:
+                default:
+                  description: Default response
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteFunction.Arn}/invocations"
       Tags:
         Project: employee-document-vault
         Environment: !Ref Env

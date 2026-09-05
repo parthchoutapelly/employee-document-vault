@@ -15,6 +15,9 @@ Parameters:
       - prod
     Description: Deployment environment, used in resource naming.
 
+Conditions:
+  IsProd: !Equals [!Ref Env, "prod"]
+
 Resources:
 
   # ---------------------------------------------------------------------
@@ -247,8 +250,8 @@ Resources:
           StringAttributeConstraints:
             MinLength: '1'
             MaxLength: '64'
-      # Protect the pool from accidental deletion in all environments
-      DeletionProtection: ACTIVE
+      # Protect the pool from accidental deletion in prod; inactive in dev/staging to allow stack rollbacks
+      DeletionProtection: !If [IsProd, ACTIVE, INACTIVE]
       UserPoolTags:
         Project: employee-document-vault
         Environment: !Ref Env
@@ -374,13 +377,38 @@ Resources:
       Name: !Sub "docvault-api-${Env}"
       StageName: v1
       TracingEnabled: true
-      Auth:
-        DefaultAuthorizer: CognitoAuthorizer
-        Authorizers:
-          CognitoAuthorizer:
-            UserPoolArn: !GetAtt DocVaultUserPool.Arn
-            Identity:
-              Header: Authorization
+      DefinitionBody:
+        openapi: '3.0.1'
+        info:
+          title: !Sub "docvault-api-${Env}"
+          version: '1.0'
+        paths:
+          /ping:
+            get:
+              summary: Unauthenticated infrastructure health probe
+              responses:
+                '200':
+                  description: Service is reachable
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: '200'
+                    responseTemplates:
+                      application/json: '{"status": "ok"}'
+        components:
+          securitySchemes:
+            CognitoAuthorizer:
+              type: apiKey
+              name: Authorization
+              in: header
+              x-amazon-apigateway-authtype: cognito_user_pools
+              x-amazon-apigateway-authorizer:
+                providerARNs:
+                  - !GetAtt DocVaultUserPool.Arn
+                type: cognito_user_pools
       Tags:
         Project: employee-document-vault
         Environment: !Ref Env

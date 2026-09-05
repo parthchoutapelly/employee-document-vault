@@ -20,14 +20,16 @@ A serverless HR document management system built on AWS (S3, DynamoDB, Cognito, 
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Repository scaffold, SAM template (storage layer only) | ✅ Complete |
-| 1 | SAM deploy of storage layer to `dev` | ⬜ |
-| 2 | Lambda functions + API Gateway + Cognito | ⬜ |
-| 3 | Frontend (React) + CloudFront | ⬜ |
-| 4 | CI/CD pipeline | ⬜ |
-| 5 | Audit log export + security diagram + deliverables | ⬜ |
+| 1 | SAM deploy of storage layer to `dev` | ✅ Complete |
+| 2 | Cognito User Pool + Employees table + API Gateway + Auth helper | 🔄 In Progress |
+| 3 | Lambda business handlers + pre-signed URL flow | ⬜ |
+| 4 | Frontend (React) + CloudFront | ⬜ |
+| 5 | CI/CD pipeline | ⬜ |
+| 6 | Audit log export + security diagram + deliverables | ⬜ |
 
 ## Quick Links
 
 - [Infrastructure README](infra/README.md)
 - [Architecture Overview](docs/architecture.md)
 - [Deliverables Checklist](docs/deliverables.md)
+- [Phase 2 Auth & Access Control](docs/auth.md)

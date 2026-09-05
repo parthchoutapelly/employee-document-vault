@@ -1,9 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Employee Document Vault - Phase 1 (Storage Layer)
-  Private S3 document storage + dedicated access-log bucket +
-  DynamoDB metadata and audit logging.
+  Employee Document Vault - Phase 1 + Phase 2
+  Storage layer (S3, KMS, DynamoDB) plus authentication and access-control
+  layer (Cognito User Pool, Employees table, API Gateway with Cognito authorizer).
 
 Parameters:
   Env:
@@ -208,6 +208,183 @@ Resources:
       SSESpecification:
         SSEEnabled: true
 
+  # =====================================================================
+  # PHASE 2 — Authentication & Access Control
+  # =====================================================================
+
+  # ---------------------------------------------------------------------
+  # Cognito User Pool
+  # ---------------------------------------------------------------------
+  DocVaultUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "docvault-user-pool-${Env}"
+      # Allow employees to sign in with their email address
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      # Password policy: 8+ chars, upper, lower, number, symbol
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 7
+      # Account recovery via email only
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      # Custom attribute: links a Cognito user to an HR employee record
+      Schema:
+        - Name: employee_id
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+          StringAttributeConstraints:
+            MinLength: '1'
+            MaxLength: '64'
+      # Protect the pool from accidental deletion in all environments
+      DeletionProtection: ACTIVE
+      UserPoolTags:
+        Project: employee-document-vault
+        Environment: !Ref Env
+
+  # Hosted-UI domain (optional) — used by the Phase 3 frontend for the Cognito
+  # hosted sign-in UI.  The prefix "docvault-<env>" is proposed; it must be
+  # globally unique across all Cognito user pools at deploy time.  Prefix
+  # availability does not need to be verified during local implementation —
+  # if the chosen prefix is taken, an alternative can be selected before
+  # the first deployment.
+  DocVaultUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "docvault-${Env}"
+      UserPoolId: !Ref DocVaultUserPool
+
+  # App client used by the SPA / API callers (no client secret)
+  DocVaultUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "docvault-client-${Env}"
+      UserPoolId: !Ref DocVaultUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      # Token validity
+      AccessTokenValidity: 60          # minutes
+      IdTokenValidity: 60              # minutes
+      RefreshTokenValidity: 43200      # minutes (30 days)
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: minutes
+      # Prevent user-existence errors leaking information
+      PreventUserExistenceErrors: ENABLED
+      # Read standard + custom attributes
+      ReadAttributes:
+        - email
+        - custom:employee_id
+      WriteAttributes:
+        - email
+        - custom:employee_id
+
+  # ---------------------------------------------------------------------
+  # Cognito User Pool Groups
+  # Maps to the three RBAC roles defined in the architecture.
+  # ---------------------------------------------------------------------
+  EmployeeGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Employee
+      Description: Standard employees — can access their own documents only
+      UserPoolId: !Ref DocVaultUserPool
+      Precedence: 30
+
+  ManagerGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Manager
+      Description: Managers — can access their own documents and those of direct reports
+      UserPoolId: !Ref DocVaultUserPool
+      Precedence: 20
+
+  HRAdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: HR_Admin
+      Description: HR Administrators — full access to all employee documents
+      UserPoolId: !Ref DocVaultUserPool
+      Precedence: 10
+
+  # ---------------------------------------------------------------------
+  # DynamoDB: Employees table
+  # Stores employee identity and manager/direct-report relationships.
+  # Primary key: employee_id (matches custom:employee_id in Cognito)
+  # GSI: manager_id-index — used by checkAccess to list direct reports
+  # ---------------------------------------------------------------------
+  EmployeesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "Employees-${Env}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: employee_id
+          AttributeType: S
+        - AttributeName: manager_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: employee_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: manager_id-index
+          KeySchema:
+            - AttributeName: manager_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Project
+          Value: employee-document-vault
+        - Key: Environment
+          Value: !Ref Env
+
+  # ---------------------------------------------------------------------
+  # API Gateway REST API
+  #
+  # WHY THIS RESOURCE EXISTS NOW (pre-Phase 3):
+  # AWS SAM requires a named AWS::Serverless::Api resource to exist in the
+  # template so that a Cognito authorizer can be declared as the *default*
+  # authorizer for all routes.  Declaring it here (without any routes)
+  # means Phase 3 Lambda functions only need to reference this API by its
+  # logical ID — they do not each have to repeat authorizer configuration.
+  # The stage is fixed at "v1" regardless of environment.
+  # ---------------------------------------------------------------------
+  DocVaultApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "docvault-api-${Env}"
+      StageName: v1
+      TracingEnabled: true
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt DocVaultUserPool.Arn
+            Identity:
+              Header: Authorization
+      Tags:
+        Project: employee-document-vault
+        Environment: !Ref Env
+
 Outputs:
   DocumentsBucketName:
     Description: S3 bucket holding employee documents
@@ -232,3 +409,37 @@ Outputs:
   KmsKeyId:
     Description: KMS key used for S3 default encryption
     Value: !Ref DocVaultKmsKey
+
+  # --- Phase 2 Outputs ---
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref DocVaultUserPool
+
+  UserPoolArn:
+    Description: Cognito User Pool ARN (referenced by API Gateway authorizer)
+    Value: !GetAtt DocVaultUserPool.Arn
+
+  UserPoolClientId:
+    Description: Cognito User Pool App Client ID (used by the frontend / CLI)
+    Value: !Ref DocVaultUserPoolClient
+
+  UserPoolDomain:
+    Description: Cognito hosted-UI domain prefix
+    Value: !Sub "docvault-${Env}"
+
+  EmployeesTableName:
+    Description: DynamoDB table storing employee identity and manager relationships
+    Value: !Ref EmployeesTable
+
+  EmployeesTableManagerGsiName:
+    Description: GSI on Employees table used to list direct reports of a manager
+    Value: manager_id-index
+
+  ApiGatewayId:
+    Description: API Gateway REST API ID
+    Value: !Ref DocVaultApi
+
+  ApiGatewayEndpoint:
+    Description: Base URL of the API Gateway stage
+    Value: !Sub "https://${DocVaultApi}.execute-api.${AWS::Region}.amazonaws.com/v1"

@@ -1,7 +1,8 @@
-# Infrastructure — Employee Document Vault
+# Infrastructure — Employee Document Vault (Phase 1 + Phase 2)
 
 This directory contains the AWS SAM template (`template.yaml`) that defines
-the **Phase 1 storage layer** for the Employee Document Vault project.
+the **Phase 1 storage layer** and the **Phase 2 authentication & access-control layer**
+for the Employee Document Vault project.
 
 ---
 
@@ -225,5 +226,72 @@ The Phase 1 exit test must not be reported as passed until it has actually been 
 - Account-level S3 Block Public Access is account-wide and is not modified by this stack. It should be verified separately in the target AWS account.
 - DynamoDB tables use AWS-managed server-side encryption (`SSEEnabled: true`).
 - The `AuditLog` table is append-only at the application layer. This infrastructure template does not create application permissions or Lambda handlers for enforcing append-only behavior.
-- Cognito, IAM application roles, Lambda functions, API Gateway routes, presigned URLs, frontend resources, CloudFront, and Phase 2/Phase 3 resources are outside the scope of Phase 1.
+- Cognito, IAM application roles, Lambda functions, API Gateway routes, presigned URLs, frontend resources, CloudFront, and Phase 3+ resources are outside the scope of Phase 1. Phase 2 adds Cognito, Employees table, and API Gateway; see below.
 - No AWS deployment should be considered complete until the deployed resources and exit test have been verified.
+
+---
+
+## Phase 2 Resources
+
+Phase 2 adds the following resources to `template.yaml`. All Phase 1 resources are
+preserved unchanged.
+
+| Resource | Logical ID | Name pattern | Purpose |
+|---|---|---|---|
+| Cognito User Pool | `DocVaultUserPool` | `docvault-user-pool-<env>` | Authentication for all roles |
+| Cognito User Pool Domain | `DocVaultUserPoolDomain` | `docvault-<env>` | Hosted-UI domain |
+| Cognito App Client | `DocVaultUserPoolClient` | `docvault-client-<env>` | SPA / CLI token exchange |
+| Cognito Group | `EmployeeGroup` | `Employee` | Standard employee role |
+| Cognito Group | `ManagerGroup` | `Manager` | Manager role |
+| Cognito Group | `HRAdminGroup` | `HR_Admin` | HR Administrator role |
+| DynamoDB Table | `EmployeesTable` | `Employees-<env>` | Employee identity & manager relationships |
+| DynamoDB GSI | — | `manager_id-index` | List direct reports of a manager |
+| API Gateway REST API | `DocVaultApi` | `docvault-api-<env>` (stage `v1`) | HTTPS entry point with Cognito authorizer |
+
+### Cognito User Pool
+
+- Sign-in: email + password
+- Password policy: 8+ chars, upper, lower, number, symbol
+- Custom attribute: `custom:employee_id` — links a Cognito user to the Employees table
+- Account recovery: email only
+- Deletion protection: ACTIVE
+
+### Cognito Groups
+
+| Group | Precedence | Role |
+|---|---|---|
+| `HR_Admin` | 10 (highest) | Full access to all employee documents |
+| `Manager` | 20 | Own documents + direct reports' documents |
+| `Employee` | 30 (lowest) | Own documents only |
+
+See [docs/auth.md](../docs/auth.md) for the full authorization matrix.
+
+### `Employees-<env>` DynamoDB Table
+
+| Attribute | Type | Key role | Notes |
+|---|---|---|---|
+| `employee_id` | String (S) | **Partition key (PK)** | Matches `custom:employee_id` in Cognito |
+| `manager_id` | String (S) | GSI partition key | `employee_id` of the direct manager |
+| *(other attributes)* | — | — | `full_name`, `email`, `department`, `job_title`, `active` (app-written) |
+
+**GSI:** `manager_id-index`
+- Partition key: `manager_id`
+- Projection: ALL
+- Use-case: "List all direct reports of manager X" (used by `checkAccess()`)
+
+**Table settings:** PAY_PER_REQUEST · AWS-managed SSE · PITR enabled
+
+### API Gateway Cognito Authorizer
+
+- All routes on `DocVaultApi` (stage `v1`) require a valid Cognito JWT in `Authorization: Bearer <token>`.
+- Token validation occurs at API Gateway — no Lambda cold-start overhead.
+- Phase 3 Lambda functions attach to this API by logical ID and automatically inherit the Cognito authorizer.
+- No routes are defined yet; they will be added in Phase 3.
+
+### Centralized Authorization Helper
+
+See `backend/shared/auth.py` and [docs/auth.md](../docs/auth.md).
+
+The `checkAccess(caller, target_employee_id, employees_table, audit_table)` function
+enforces the RBAC matrix and writes an `ACCESS_DENIED` audit record
+(`action="ACCESS_DENIED"`, `result="DENIED"`) to `AuditLog-<env>` on any denial.

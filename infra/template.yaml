@@ -376,7 +376,7 @@ Resources:
     Properties:
       Name: !Sub "docvault-api-${Env}"
       StageName: v1
-      TracingEnabled: true
+      TracingEnabled: false
       DefinitionBody:
         openapi: '3.0.1'
         info:

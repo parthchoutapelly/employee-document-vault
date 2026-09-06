@@ -71,6 +71,36 @@
   --shadow-card:   0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
   --shadow-popover:0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   --shadow-modal:  0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-sm:     0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-md:     0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+  --shadow-lg:     0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+  --shadow-xl:     0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
+
+  /* Universal component aliases */
+  --bg-canvas:           var(--veyra-bg-app);
+  --bg-surface:          var(--veyra-bg-surface);
+  --bg-subtle:           var(--veyra-bg-subtle);
+
+  --border:              #cbd5e1; /* Slate 300 — clearly visible enterprise border */
+  --border-subtle:       var(--veyra-border); /* Slate 200 */
+  --border-focus:        var(--veyra-accent);
+
+  --accent:              var(--veyra-accent);
+  --accent-hover:        var(--veyra-accent-hover);
+  --accent-subtle:       var(--veyra-accent-subtle);
+  --accent-border:       var(--veyra-accent-border);
+
+  --text-primary:        var(--veyra-text-primary);
+  --text-secondary:      var(--veyra-text-secondary);
+  --text-muted:          var(--veyra-text-muted);
+
+  --error:               var(--veyra-status-danger);
+  --error-subtle:        var(--veyra-status-danger-bg);
+  --error-border:        var(--veyra-status-danger-border);
+
+  --speed-fast:          150ms;
+  --speed-base:          200ms;
+  --ease:                cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Typography */
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

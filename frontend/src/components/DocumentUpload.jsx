@@ -154,8 +154,30 @@ export default function DocumentUpload({ onUploadSuccess }) {
           <div>
             <h2 id="upload-heading" className="doc-upload__title">Upload Document</h2>
             <p className="doc-upload__desc">
-              Files are encrypted at rest with AWS KMS and tied to your employee record.
+              Direct-to-S3 transfer with AWS KMS customer-managed key encryption and automatic vault association.
             </p>
+            <div className="doc-upload__specs">
+              <span className="doc-upload__spec-pill">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                PDF, PNG, JPG, DOCX
+              </span>
+              <span className="doc-upload__spec-pill">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Max 10 MB
+              </span>
+              <span className="doc-upload__spec-pill doc-upload__spec-pill--security">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                SSE-KMS Secured
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -229,22 +251,30 @@ export default function DocumentUpload({ onUploadSuccess }) {
             <label className="doc-upload__label" htmlFor="doc-file-input">
               File Selection <span className="req-star" aria-hidden="true">*</span>
             </label>
-            <input
-              id="doc-file-input"
-              ref={fileInputRef}
-              type="file"
-              className="doc-upload__file-input"
-              onChange={handleFileChange}
-              disabled={uploading}
-              aria-required="true"
-              data-testid="upload-file-input"
-            />
+            <div className="doc-upload__input-wrapper">
+              <input
+                id="doc-file-input"
+                ref={fileInputRef}
+                type="file"
+                className="doc-upload__file-input"
+                onChange={handleFileChange}
+                disabled={uploading}
+                aria-required="true"
+                data-testid="upload-file-input"
+              />
+            </div>
           </div>
         </div>
 
         {/* Selected file summary card */}
         {selectedFile && (
           <div className="doc-upload__file-preview" data-testid="upload-file-preview">
+            <div className="doc-upload__file-preview-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+            </div>
             <div className="doc-upload__file-preview-info">
               <span className="doc-upload__file-preview-name" title={selectedFile.name}>
                 {selectedFile.name}
@@ -252,6 +282,7 @@ export default function DocumentUpload({ onUploadSuccess }) {
               <span className="doc-upload__file-preview-size">
                 ({formatFileSize(selectedFile.size)})
               </span>
+              <span className="doc-upload__file-preview-status">Ready to upload</span>
             </div>
             <button
               type="button"

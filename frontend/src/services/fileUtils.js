@@ -65,3 +65,40 @@ export function getDefaultTags(documentType) {
       return ['General'];
   }
 }
+
+/**
+ * Determine document security classification:
+ * - Explicit doc.classification if present
+ * - Or matched tag if a tag is 'Restricted' | 'Confidential' | 'Internal' | 'Public'
+ * - Or inferred from document_type:
+ *     id_proof -> 'Restricted'
+ *     offer_letter, payslip -> 'Confidential'
+ *     appraisal, resume -> 'Internal'
+ *     other -> 'Internal'
+ */
+export function getDocumentClassification(doc) {
+  if (doc?.classification && typeof doc.classification === 'string') {
+    const c = doc.classification.trim();
+    return c.charAt(0).toUpperCase() + c.slice(1).toLowerCase();
+  }
+  const tags = Array.isArray(doc?.tags) ? doc.tags : [];
+  const found = tags.find((t) =>
+    ['restricted', 'confidential', 'internal', 'public'].includes(String(t).toLowerCase().trim())
+  );
+  if (found) {
+    const s = String(found).trim().toLowerCase();
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  switch (doc?.document_type) {
+    case 'id_proof':
+      return 'Restricted';
+    case 'offer_letter':
+    case 'payslip':
+      return 'Confidential';
+    case 'appraisal':
+    case 'resume':
+      return 'Internal';
+    default:
+      return 'Internal';
+  }
+}

@@ -146,6 +146,9 @@
 }
 
 .veyra-drawer__sec-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 2px 8px;
   border-radius: var(--radius-full);
   background: var(--success-subtle);
@@ -153,6 +156,12 @@
   font-size: 0.75rem;
   color: var(--success);
   font-weight: 600;
+}
+
+.veyra-drawer__text-sm {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 /* Timeline */

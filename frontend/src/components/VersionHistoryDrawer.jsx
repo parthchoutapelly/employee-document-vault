@@ -6,8 +6,9 @@
  */
 import { useState, useEffect, useCallback } from 'react'
 import { getDocumentVersions } from '../services/api'
-import { formatFileSize, getDocumentTypeLabel } from '../services/fileUtils'
+import { formatFileSize, getDocumentTypeLabel, getDocumentClassification } from '../services/fileUtils'
 import { getErrorMessage } from '../services/errorMessages'
+import ClassificationBadge from './ClassificationBadge'
 import './VersionHistoryDrawer.css'
 
 function formatTimestamp(ts) {
@@ -66,7 +67,7 @@ export default function VersionHistoryDrawer({
         {/* Drawer Header */}
         <div className="veyra-drawer__header">
           <div className="veyra-drawer__header-left">
-            <span className="veyra-drawer__badge">S3 Version History</span>
+            <span className="veyra-drawer__badge">Document Details &amp; History</span>
             <h3 id="drawer-title" className="veyra-drawer__title">
               {doc.filename || 'Document Details'}
             </h3>
@@ -85,11 +86,21 @@ export default function VersionHistoryDrawer({
         <div className="veyra-drawer__body">
           {/* Metadata Card */}
           <div className="veyra-drawer__card">
-            <h4 className="veyra-drawer__section-title">Storage Summary</h4>
+            <h4 className="veyra-drawer__section-title">Document Security &amp; Storage</h4>
             <dl className="veyra-drawer__dl">
               <div className="veyra-drawer__row">
                 <dt>Classification</dt>
+                <dd>
+                  <ClassificationBadge classification={getDocumentClassification(doc)} />
+                </dd>
+              </div>
+              <div className="veyra-drawer__row">
+                <dt>Document Type</dt>
                 <dd className="veyra-drawer__type-pill">{getDocumentTypeLabel(doc.document_type)}</dd>
+              </div>
+              <div className="veyra-drawer__row">
+                <dt>Owner / Vault</dt>
+                <dd className="veyra-drawer__mono">{doc.employee_id || '—'}</dd>
               </div>
               <div className="veyra-drawer__row">
                 <dt>Document ID</dt>
@@ -101,7 +112,17 @@ export default function VersionHistoryDrawer({
               </div>
               <div className="veyra-drawer__row">
                 <dt>Encryption</dt>
-                <dd className="veyra-drawer__sec-chip">SSE-KMS (AWS Key 40ee685d)</dd>
+                <dd className="veyra-drawer__sec-chip">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span>SSE-KMS (AWS KMS 40ee685d)</span>
+                </dd>
+              </div>
+              <div className="veyra-drawer__row">
+                <dt>Access Policy</dt>
+                <dd className="veyra-drawer__text-sm">RBAC Enforced (Cognito &amp; IAM)</dd>
               </div>
             </dl>
           </div>

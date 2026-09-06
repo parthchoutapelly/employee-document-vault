@@ -60,49 +60,37 @@ Every operation is authenticated via **Amazon Cognito** and authorized by an app
 
 ```mermaid
 flowchart TD
-    Users["Users<br/>(Employee / Manager / HR Admin)"]
-    Frontend["VEYRA React Frontend<br/>(Vite / Single-Page App)"]
-    Cognito["Amazon Cognito<br/>(User Pool & JWT Issuer)"]
-    ApiGw["Amazon API Gateway<br/>(REST API / v1)"]
-    Authorizer["Cognito Authorizer<br/>(JWT Token Validation)"]
+    Users[Users: Employee / Manager / HR Admin]
+    Frontend[VEYRA React Frontend]
+    Cognito[Amazon Cognito]
+    ApiGw[Amazon API Gateway]
+    Auth[Cognito Authorizer]
 
-    subgraph LambdaFunctions ["AWS Lambda Handlers"]
-        UploadFn["UploadFunction<br/>(upload.py)"]
-        ListFn["ListFilesFunction<br/>(files.py)"]
-        DownloadFn["DownloadFunction<br/>(download.py)"]
-        DeleteFn["DeleteFunction<br/>(delete.py)"]
-        UpdateTagsFn["UpdateTagsFunction<br/>(tags.py)"]
-        VersionsFn["VersionsFunction<br/>(versions.py)"]
-        ActivityFn["ActivityFunction<br/>(activity.py)"]
+    subgraph LambdaFunctions [AWS Lambda Handlers]
+        UploadFn[UploadFunction]
+        ListFn[ListFilesFunction]
+        DownloadFn[DownloadFunction]
+        DeleteFn[DeleteFunction]
+        UpdateTagsFn[UpdateTagsFunction]
+        VersionsFn[VersionsFunction]
+        ActivityFn[ActivityFunction]
     end
 
-    subgraph Storage ["Amazon S3"]
-        DocBucket[("Documents Bucket<br/>• Private access<br/>• Object versioning<br/>• SSE-KMS encryption")]
-        LogBucket[("Access Logs Bucket<br/>• Server access logging")]
-    end
+    DocBucket[(S3 Documents Bucket)]
+    LogBucket[(S3 Access Logs Bucket)]
+    Dynamo[(DynamoDB: Documents / Employees / AuditLog)]
+    KMS[AWS KMS]
 
-    subgraph Database ["Amazon DynamoDB"]
-        DocsTable[("Documents Table<br/>Metadata & GSI")]
-        EmpTable[("Employees Table<br/>Org & Manager GSI")]
-        AuditTable[("AuditLog Table<br/>Append-only trail")]
-    end
-
-    KMS["AWS KMS<br/>alias/docvault-env"]
-
-    Users -->|Interacts with UI| Frontend
-    Frontend -->|Authenticate| Cognito
-    Cognito -.->|ID Token| Frontend
-    Frontend -->|HTTPS API Requests with Bearer JWT| ApiGw
-    ApiGw -->|Validate JWT| Authorizer
-    Authorizer -->|Authorized Event & Claims| LambdaFunctions
-
-    UploadFn & DownloadFn -.->|Presigned S3 URLs| Frontend
-    Frontend -->|Direct S3 PUT/GET| DocBucket
-    DocBucket -.->|Server Access Logs| LogBucket
-
-    LambdaFunctions -->|Read / Write| Database
-    UploadFn & DownloadFn -.->|Generate Presigned URL| DocBucket
-    DocBucket ---|SSE-KMS Encryption Key| KMS
+    Users --> Frontend
+    Frontend --> Cognito
+    Frontend --> ApiGw
+    ApiGw --> Auth
+    Auth --> LambdaFunctions
+    LambdaFunctions --> Dynamo
+    LambdaFunctions -.-> DocBucket
+    DocBucket --> LogBucket
+    DocBucket --- KMS
+    Frontend -.->|Presigned S3 PUT/GET| DocBucket
 ```
 
 ### S3 Two-Bucket Design
@@ -148,9 +136,10 @@ documents/EMP-00123/offer-letter/offer_letter_2024.pdf
 
 ```mermaid
 flowchart LR
-    Browser["Browser PUT<br/>(Presigned URL)"] -->|"x-amz-server-side-encryption: aws:kms"| S3["S3 DocumentsBucket"]
-    KMS["AWS KMS<br/>(alias/docvault-env)"] -->|"Envelope Encryption"| S3
-    S3 --> Storage["Encrypted Object at Rest<br/>(SSE-KMS)"]
+    Browser[Browser] --> Presigned[Presigned S3 PUT]
+    Presigned --> S3Bucket[S3 Documents Bucket]
+    S3Bucket --> SSEKMS[SSE-KMS]
+    SSEKMS --> KMSKey[KMS Key]
 ```
 
 ---
@@ -180,17 +169,22 @@ Three Cognito groups map directly to RBAC roles. The `checkAccess()` helper (cal
 
 ```mermaid
 flowchart TD
-    Req["User Request<br/>(Bearer ID Token)"] --> AuthN["Cognito Authentication<br/>(Validates Signature & Claims)"]
-    AuthN --> ApiGw["API Gateway Cognito Authorizer<br/>(Zero Lambda Cold-Start)"]
-    ApiGw --> Lambda["Lambda Handler Execution"]
-    Lambda --> CheckAccess{"checkAccess()<br/>RBAC Verification"}
+    Req[User Request] --> Auth[Cognito Authentication]
+    Auth --> ApiGw[API Gateway]
+    ApiGw --> Lambda[Lambda Handler]
+    Lambda --> Check[checkAccess]
 
-    CheckAccess -->|"HR_Admin / Self / Direct Report"| Allowed["Authorized Operation"]
-    Allowed --> BusinessLogic["Perform Action<br/>(Upload / Download / Query / Delete)"]
+    Check --> Allowed[Access Allowed]
+    Check -.-> ScopeEmp[Employee: Self Only]
+    Check -.-> ScopeMgr[Manager: Self and Direct Reports]
+    Check -.-> ScopeHR[HR_Admin: All Employees]
 
-    CheckAccess -->|"Unauthorized"| Denied["ACCESS_DENIED Event"]
-    Denied --> WriteAudit[("Append to AuditLog Table<br/>result: DENIED")]
-    WriteAudit --> Forbidden["Raise AccessDeniedError<br/>(Return HTTP 403 Forbidden)"]
+    Allowed -->|Yes| Perform[Perform Operation]
+    Perform --> Actions[Upload Download List Delete]
+
+    Allowed -->|No| Denied[Write ACCESS_DENIED]
+    Denied --> Audit[AuditLog]
+    Audit --> Http403[Return HTTP 403]
 ```
 
 Every denied access attempt writes an audit record before raising the error. The denial reason is logged but **never returned to the client** (prevents information leakage).
@@ -201,17 +195,17 @@ Every denied access attempt writes an audit record before raising the error. The
 
 ```mermaid
 flowchart TD
-    Req["Upload Request<br/>(Metadata: filename, type, tags)"] --> AuthCheck["Authentication & RBAC Check<br/>(Cognito JWT + checkAccess)"]
-    AuthCheck --> PresignedGen["Generate Presigned S3 PUT URL<br/>(15-min expiry + KMS encryption header)"]
-    PresignedGen --> MetaPending[("Write Metadata to Documents Table<br/>(Status: PENDING_UPLOAD)")]
-    MetaPending --> BrowserUpload["Browser Direct S3 Upload<br/>(PUT with x-amz-server-side-encryption: aws:kms)"]
-    BrowserUpload --> S3Storage["S3 DocumentsBucket<br/>• SSE-KMS Encryption<br/>• S3 Object Versioning"]
-    S3Storage --> AvailDoc["Available Document in Vault"]
+    UploadReq[Upload Request] --> AuthCheck[Authentication and RBAC Check]
+    AuthCheck --> Presigned[Generate Presigned S3 PUT URL]
+    Presigned --> MetaPending[(Write Metadata: PENDING_UPLOAD)]
+    MetaPending --> DirectUpload[Browser Direct S3 Upload]
+    DirectUpload --> EncryptedStore[S3 Bucket: SSE-KMS and Versioning]
+    EncryptedStore --> AvailableDoc[Available Document]
 
-    AvailDoc --> ActionDownload["Download Document<br/>• Presigned GET URL<br/>• Content-Disposition: attachment"]
-    AvailDoc --> ActionVersion["Version History<br/>• List S3 object versions<br/>• Download historical version"]
-    AvailDoc --> ActionTags["Tagging & Classification<br/>• Update type & tags (PATCH)"]
-    AvailDoc --> ActionDelete["Delete Document<br/>• Soft-confirm modal<br/>• S3 delete marker + AuditLog"]
+    AvailableDoc --> Download[Download: Presigned GET URL]
+    AvailableDoc --> VersionHist[Version History]
+    AvailableDoc --> Tags[Update Tags and Classification]
+    AvailableDoc --> SoftDelete[Delete Document]
 ```
 
 ---

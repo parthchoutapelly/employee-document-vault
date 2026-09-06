@@ -85,11 +85,12 @@ def handler(event: Dict[str, Any], context: Any, resources: Optional[Dict[str, A
         raw_items: List[Dict[str, Any]] = resp.get("Items", [])
 
         # Filter out logically deleted records and uncompleted/pending uploads
-        active_items = [
-            _convert_decimals(item)
-            for item in raw_items
-            if item.get("status") not in ("DELETED", "PENDING_UPLOAD")
-        ]
+        active_items = []
+        for raw_item in raw_items:
+            if raw_item.get("status") not in ("DELETED", "PENDING_UPLOAD"):
+                conv = _convert_decimals(raw_item)
+                conv["tags"] = conv.get("tags") if isinstance(conv.get("tags"), list) else []
+                active_items.append(conv)
 
         # 6. Audit Log
         write_audit_log(

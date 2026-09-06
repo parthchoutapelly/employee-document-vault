@@ -1,0 +1,108 @@
+/* ─── Delete Confirmation Modal Styles ─────────────────────────────────── */
+
+.veyra-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1.5rem;
+  animation: fadeIn 120ms ease-out;
+}
+
+.veyra-modal__card {
+  width: 100%;
+  max-width: 440px;
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--veyra-border);
+  box-shadow: var(--shadow-modal);
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.veyra-modal__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--veyra-status-danger-bg);
+  border: 1px solid var(--veyra-status-danger-border);
+  color: var(--veyra-status-danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.veyra-modal__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.veyra-modal__title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--veyra-text-primary);
+}
+
+.veyra-modal__desc {
+  font-size: 0.88rem;
+  color: var(--veyra-text-secondary);
+  line-height: 1.5;
+}
+
+.veyra-modal__desc strong {
+  color: var(--veyra-text-primary);
+}
+
+.veyra-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.veyra-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 1.15rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 120ms ease;
+  border: 1px solid transparent;
+}
+
+.veyra-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.veyra-btn--secondary {
+  background: #ffffff;
+  border-color: var(--veyra-border);
+  color: var(--veyra-text-secondary);
+}
+
+.veyra-btn--secondary:hover:not(:disabled) {
+  background: var(--veyra-bg-subtle);
+  color: var(--veyra-text-primary);
+}
+
+.veyra-btn--danger {
+  background: var(--veyra-status-danger);
+  color: #ffffff;
+}
+
+.veyra-btn--danger:hover:not(:disabled) {
+  background: #b91c1c;
+}

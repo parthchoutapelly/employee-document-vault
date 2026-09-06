@@ -11,6 +11,8 @@ from handlers.upload import handler as upload_handler
 from handlers.files import handler as files_handler
 from handlers.download import handler as download_handler
 from handlers.delete import handler as delete_handler
+from handlers.tags import handler as tags_handler
+from handlers.versions import handler as versions_handler
 
 
 def make_claims(employee_id: str, groups: list) -> dict:
@@ -63,7 +65,7 @@ class TestUploadHandler(unittest.TestCase):
         saved_item = res["documents_table"].put_item.call_args[1]["Item"]
         self.assertEqual(saved_item["employee_id"], "EMP-001")
         self.assertEqual(saved_item["document_type"], "offer_letter")
-        self.assertEqual(saved_item["status"], "PENDING_UPLOAD")
+        self.assertEqual(saved_item["status"], "AVAILABLE")
 
         # Verify Audit Log written
         res["audit_table"].put_item.assert_called_once()
@@ -434,4 +436,364 @@ class TestDeleteHandler(unittest.TestCase):
         res = make_mock_resources()
         event = {"pathParameters": {"doc_id": "doc-123"}}
         resp = delete_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 401)
+
+
+class TestUpdateTagsHandler(unittest.TestCase):
+    """Unit tests for PATCH /files/{doc_id} tag updates."""
+
+    def test_update_tags_success_employee_own_doc(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-123",
+                "employee_id": "EMP-001",
+                "filename": "resume.pdf",
+                "status": "AVAILABLE",
+            }
+        }
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+            "body": json.dumps({"tags": ["Confidential", "Profile"]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["tags"], ["Confidential", "Profile"])
+        self.assertEqual(body["document_id"], "doc-123")
+        res["documents_table"].update_item.assert_called_once()
+
+        # Verify audit log recorded
+        audit_call = res["audit_table"].put_item.call_args[1]["Item"]
+        self.assertEqual(audit_call["action"], "TAGS_UPDATED")
+        self.assertEqual(audit_call["result"], "SUCCESS")
+        self.assertEqual(audit_call["caller_user_id"], "EMP-001")
+        self.assertEqual(audit_call["tags"], ["Confidential", "Profile"])
+
+    def test_update_tags_empty_list_clears_tags(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-123",
+                "employee_id": "EMP-001",
+                "filename": "resume.pdf",
+                "status": "AVAILABLE",
+                "tags": ["OldTag"],
+            }
+        }
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+            "body": json.dumps({"tags": []}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["tags"], [])
+
+    def test_update_tags_manager_direct_report_success(self):
+        res = make_mock_resources(direct_reports=["EMP-002"])
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-456",
+                "employee_id": "EMP-002",
+                "filename": "report.pdf",
+                "status": "AVAILABLE",
+            }
+        }
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-MGR1", ["Manager"])}},
+            "pathParameters": {"doc_id": "doc-456"},
+            "body": json.dumps({"tags": ["Verified", "Q1"]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+
+    def test_update_tags_hr_admin_any_employee_success(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-999",
+                "employee_id": "EMP-999",
+                "filename": "appraisal.pdf",
+                "status": "AVAILABLE",
+            }
+        }
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-HR1", ["HR_Admin"])}},
+            "pathParameters": {"doc_id": "doc-999"},
+            "body": json.dumps({"tags": ["HR-Approved"]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+
+    def test_update_tags_unauthorized_forbidden(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-123",
+                "employee_id": "EMP-002",
+                "filename": "secret.pdf",
+                "status": "AVAILABLE",
+            }
+        }
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+            "body": json.dumps({"tags": ["Hacked"]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 403)
+        res["documents_table"].update_item.assert_not_called()
+
+        audit_item = res["audit_table"].put_item.call_args[1]["Item"]
+        self.assertEqual(audit_item["action"], "ACCESS_DENIED")
+        self.assertEqual(audit_item["result"], "DENIED")
+
+    def test_update_tags_rejects_more_than_5_tags(self):
+        res = make_mock_resources()
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+            "body": json.dumps({"tags": ["1", "2", "3", "4", "5", "6"]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 400)
+        self.assertIn("Maximum 5 tags", json.loads(resp["body"])["message"])
+
+    def test_update_tags_rejects_oversized_tag(self):
+        res = make_mock_resources()
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+            "body": json.dumps({"tags": ["a" * 31]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 400)
+        self.assertIn("maximum length of 30", json.loads(resp["body"])["message"])
+
+    def test_update_tags_rejects_empty_or_whitespace_tag(self):
+        res = make_mock_resources()
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+            "body": json.dumps({"tags": ["   "]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 400)
+
+    def test_update_tags_deduplicates_duplicate_tags(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-123",
+                "employee_id": "EMP-001",
+                "filename": "resume.pdf",
+                "status": "AVAILABLE",
+            }
+        }
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+            "body": json.dumps({"tags": ["Finance", "finance", "FINANCE"]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["tags"], ["Finance"])
+
+    def test_update_tags_nonexistent_doc_returns_404(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {}
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "nonexistent"},
+            "body": json.dumps({"tags": ["Finance"]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 404)
+
+    def test_update_tags_missing_auth_returns_401(self):
+        res = make_mock_resources()
+        event = {
+            "pathParameters": {"doc_id": "doc-123"},
+            "body": json.dumps({"tags": ["Finance"]}),
+        }
+        resp = tags_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 401)
+
+
+class TestVersionHistoryHandler(unittest.TestCase):
+    """Unit tests for GET /files/{doc_id}/versions handler."""
+
+    def test_versions_employee_own_doc_success(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-123",
+                "employee_id": "EMP-001",
+                "filename": "resume.pdf",
+                "s3_key": "documents/EMP-001/resume/resume.pdf",
+                "status": "AVAILABLE",
+            }
+        }
+        res["s3_client"].list_object_versions.return_value = {
+            "Versions": [
+                {
+                    "Key": "documents/EMP-001/resume/resume.pdf",
+                    "VersionId": "v2",
+                    "LastModified": "2026-09-06T10:00:00Z",
+                    "IsLatest": True,
+                    "Size": 2048,
+                },
+                {
+                    "Key": "documents/EMP-001/resume/resume.pdf",
+                    "VersionId": "v1",
+                    "LastModified": "2026-09-05T10:00:00Z",
+                    "IsLatest": False,
+                    "Size": 1024,
+                },
+            ],
+            "DeleteMarkers": [],
+        }
+
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+        }
+        resp = versions_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["document_id"], "doc-123")
+        self.assertEqual(body["count"], 2)
+        self.assertEqual(body["versions"][0]["version_id"], "v2")
+        self.assertTrue(body["versions"][0]["is_latest"])
+        self.assertFalse(body["versions"][0]["is_delete_marker"])
+
+        # Verify audit log
+        audit_call = res["audit_table"].put_item.call_args[1]["Item"]
+        self.assertEqual(audit_call["action"], "VERSIONS_LISTED")
+        self.assertEqual(audit_call["result"], "SUCCESS")
+
+    def test_versions_includes_delete_markers(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-123",
+                "employee_id": "EMP-001",
+                "filename": "doc.pdf",
+                "s3_key": "documents/EMP-001/other/doc.pdf",
+                "status": "DELETED",
+            }
+        }
+        res["s3_client"].list_object_versions.return_value = {
+            "Versions": [
+                {
+                    "Key": "documents/EMP-001/other/doc.pdf",
+                    "VersionId": "v1",
+                    "LastModified": "2026-09-05T10:00:00Z",
+                    "IsLatest": False,
+                    "Size": 1024,
+                },
+            ],
+            "DeleteMarkers": [
+                {
+                    "Key": "documents/EMP-001/other/doc.pdf",
+                    "VersionId": "del-marker-1",
+                    "LastModified": "2026-09-06T12:00:00Z",
+                    "IsLatest": True,
+                }
+            ],
+        }
+
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+        }
+        resp = versions_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["count"], 2)
+        # Delete marker should be first (newer timestamp)
+        self.assertTrue(body["versions"][0]["is_delete_marker"])
+        self.assertEqual(body["versions"][0]["version_id"], "del-marker-1")
+
+    def test_versions_manager_direct_report_success(self):
+        res = make_mock_resources(direct_reports=["EMP-002"])
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-456",
+                "employee_id": "EMP-002",
+                "filename": "report.pdf",
+                "s3_key": "documents/EMP-002/appraisal/report.pdf",
+                "status": "AVAILABLE",
+            }
+        }
+        res["s3_client"].list_object_versions.return_value = {"Versions": [], "DeleteMarkers": []}
+
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-MGR1", ["Manager"])}},
+            "pathParameters": {"doc_id": "doc-456"},
+        }
+        resp = versions_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+
+    def test_versions_hr_admin_any_employee_success(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-999",
+                "employee_id": "EMP-999",
+                "filename": "audit.pdf",
+                "s3_key": "documents/EMP-999/other/audit.pdf",
+                "status": "AVAILABLE",
+            }
+        }
+        res["s3_client"].list_object_versions.return_value = {"Versions": [], "DeleteMarkers": []}
+
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-HR1", ["HR_Admin"])}},
+            "pathParameters": {"doc_id": "doc-999"},
+        }
+        resp = versions_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+
+    def test_versions_unauthorized_forbidden(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-123",
+                "employee_id": "EMP-002",
+                "filename": "secret.pdf",
+                "s3_key": "documents/EMP-002/offer_letter/secret.pdf",
+                "status": "AVAILABLE",
+            }
+        }
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+        }
+        resp = versions_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 403)
+        res["s3_client"].list_object_versions.assert_not_called()
+
+        audit_item = res["audit_table"].put_item.call_args[1]["Item"]
+        self.assertEqual(audit_item["action"], "ACCESS_DENIED")
+        self.assertEqual(audit_item["result"], "DENIED")
+
+    def test_versions_nonexistent_doc_returns_404(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {}
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "nonexistent"},
+        }
+        resp = versions_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 404)
+
+    def test_versions_missing_auth_returns_401(self):
+        res = make_mock_resources()
+        event = {"pathParameters": {"doc_id": "doc-123"}}
+        resp = versions_handler(event, None, resources=res)
         self.assertEqual(resp["statusCode"], 401)

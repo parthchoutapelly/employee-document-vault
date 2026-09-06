@@ -1,0 +1,225 @@
+/* ─── VEYRA Topbar / Navbar Styles ───────────────────────────────────────── */
+
+.veyra-topbar {
+  height: 60px;
+  background: var(--veyra-bg-surface);
+  border-bottom: 1px solid var(--veyra-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.veyra-topbar__left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.veyra-topbar__hamburger {
+  display: none;
+  background: transparent;
+  border: 0;
+  color: var(--veyra-text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-xs);
+}
+
+.veyra-topbar__hamburger:hover {
+  color: var(--veyra-text-primary);
+  background: var(--veyra-bg-subtle);
+}
+
+/* Breadcrumbs */
+.veyra-topbar__breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--veyra-text-secondary);
+}
+
+.veyra-topbar__crumb-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.veyra-topbar__crumb-sep {
+  color: var(--veyra-text-muted);
+  font-size: 0.75rem;
+}
+
+.veyra-topbar__crumb {
+  font-weight: 500;
+}
+
+.veyra-topbar__crumb--active {
+  color: var(--veyra-text-primary);
+  font-weight: 600;
+}
+
+/* Center Search Input */
+.veyra-topbar__search {
+  flex: 1;
+  max-width: 420px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.veyra-topbar__search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--veyra-text-muted);
+  pointer-events: none;
+}
+
+.veyra-topbar__search-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 2rem 0 2.25rem;
+  background: var(--veyra-bg-subtle);
+  border: 1px solid var(--veyra-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--veyra-text-primary);
+  transition: all 120ms ease;
+  outline: none;
+}
+
+.veyra-topbar__search-input:focus {
+  background: #ffffff;
+  border-color: var(--veyra-border-focus);
+  box-shadow: 0 0 0 3px var(--veyra-accent-subtle);
+}
+
+.veyra-topbar__search-clear {
+  position: absolute;
+  right: 0.5rem;
+  background: transparent;
+  border: 0;
+  color: var(--veyra-text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+
+/* Right status */
+.veyra-topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.veyra-topbar__security-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.veyra-topbar__sec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-full);
+  color: #475569;
+  letter-spacing: 0.02em;
+}
+
+.veyra-topbar__sec-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: #16a34a;
+}
+
+/* Identity badge */
+.veyra-topbar__identity {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.veyra-topbar__emp-id {
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--veyra-text-secondary);
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  border: 1px solid #e2e8f0;
+}
+
+.veyra-topbar__badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.veyra-topbar__badge--emp {
+  background: var(--veyra-role-emp-bg);
+  color: var(--veyra-role-emp);
+  border: 1px solid var(--veyra-role-emp-border);
+}
+
+.veyra-topbar__badge--mgr {
+  background: var(--veyra-role-mgr-bg);
+  color: var(--veyra-role-mgr);
+  border: 1px solid var(--veyra-role-mgr-border);
+}
+
+.veyra-topbar__badge--hr {
+  background: var(--veyra-role-hr-bg);
+  color: var(--veyra-role-hr);
+  border: 1px solid var(--veyra-role-hr-border);
+}
+
+.veyra-topbar__signout {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 32px;
+  padding: 0 0.65rem;
+  background: #ffffff;
+  border: 1px solid var(--veyra-border);
+  border-radius: var(--radius-sm);
+  color: var(--veyra-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.veyra-topbar__signout:hover {
+  background: var(--veyra-status-danger-bg);
+  border-color: var(--veyra-status-danger-border);
+  color: var(--veyra-status-danger);
+}
+
+@media (max-width: 860px) {
+  .veyra-topbar__hamburger {
+    display: block;
+  }
+  .veyra-topbar__search {
+    display: none;
+  }
+  .veyra-topbar__sec-pill--hide-mobile {
+    display: none;
+  }
+}

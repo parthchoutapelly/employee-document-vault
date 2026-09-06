@@ -113,7 +113,7 @@ def handler(event: Dict[str, Any], context: Any, resources: Optional[Dict[str, A
             "filename": filename,
             "s3_key": s3_key,
             "uploaded_by": caller_employee_id,
-            "status": "PENDING_UPLOAD",
+            "status": "AVAILABLE",
         }
         documents_table.put_item(Item=doc_item)
 

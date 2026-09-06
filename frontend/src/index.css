@@ -1,0 +1,136 @@
+/* ─── VEYRA Design System — Light Enterprise Document Workspace ────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Core Canvas & Surfaces */
+  --veyra-bg-app:        #f8fafc; /* Slate 50 — clean workspace background */
+  --veyra-bg-surface:    #ffffff; /* Pure white card/table surface */
+  --veyra-bg-subtle:     #f1f5f9; /* Slate 100 — subtle hover/header */
+  --veyra-bg-sidebar:    #0f172a; /* Slate 900 — authoritative left rail */
+  --veyra-bg-sidebar-hover: #1e293b; /* Slate 800 — active nav hover */
+  --veyra-bg-sidebar-active: #2563eb; /* Blue 600 — active rail item */
+
+  /* Borders & Dividers */
+  --veyra-border:        #e2e8f0; /* Slate 200 — hairline divider */
+  --veyra-border-subtle: #cbd5e1; /* Slate 300 — input border */
+  --veyra-border-focus:  #2563eb; /* Blue 600 — focus ring */
+
+  /* Primary Accent — Professional Blue */
+  --veyra-accent:        #2563eb; /* Blue 600 */
+  --veyra-accent-hover:  #1d4ed8; /* Blue 700 */
+  --veyra-accent-subtle: #eff6ff; /* Blue 50 */
+  --veyra-accent-border: #bfdbfe; /* Blue 200 */
+
+  /* Typography Colors */
+  --veyra-text-primary:   #0f172a; /* Slate 900 — high contrast header/body */
+  --veyra-text-secondary: #475569; /* Slate 600 — subtext & metadata */
+  --veyra-text-muted:     #94a3b8; /* Slate 400 — placeholders/timestamps */
+  --veyra-text-sidebar:   #94a3b8; /* Slate 400 — sidebar inactive */
+  --veyra-text-sidebar-active: #ffffff; /* White — sidebar active text */
+
+  /* Status Colors */
+  --veyra-status-success:        #16a34a; /* Green 600 */
+  --veyra-status-success-bg:     #f0fdf4; /* Green 50 */
+  --veyra-status-success-border: #bbf7d0; /* Green 200 */
+
+  --veyra-status-danger:         #dc2626; /* Red 600 */
+  --veyra-status-danger-bg:      #fef2f2; /* Red 50 */
+  --veyra-status-danger-border:  #fecaca; /* Red 200 */
+
+  --veyra-status-warning:        #d97706; /* Amber 600 */
+  --veyra-status-warning-bg:     #fffbeb; /* Amber 50 */
+  --veyra-status-warning-border: #fde68a; /* Amber 200 */
+
+  /* Role Badges */
+  --veyra-role-emp:        #0284c7; /* Sky 600 — Employee */
+  --veyra-role-emp-bg:     #f0f9ff;
+  --veyra-role-emp-border: #bae6fd;
+
+  --veyra-role-mgr:        #7c3aed; /* Violet 600 — Manager */
+  --veyra-role-mgr-bg:     #f5f3ff;
+  --veyra-role-mgr-border: #ddd6fe;
+
+  --veyra-role-hr:         #059669; /* Emerald 600 — HR Admin */
+  --veyra-role-hr-bg:      #ecfdf5;
+  --veyra-role-hr-border:  #a7f3d0;
+
+  /* Geometry */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* Shadows — Restrained & Crisp */
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card:   0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
+  --shadow-popover:0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-modal:  0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+
+  /* Typography */
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color-scheme: light;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  background: var(--veyra-bg-app);
+  color: var(--veyra-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ─── Utilities ─────────────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── Spinner Keyframes ─────────────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes drawerSlideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}

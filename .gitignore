@@ -58,3 +58,14 @@ samconfig.toml
 *.tfstate
 *.tfstate.*
 .terraform/
+
+# Local audit/evidence exports
+audit_log_export.csv
+audit_log_export.json
+
+# Temporary development/scratch files
+scratch/
+
+# Local IAM policy artifacts
+docvault-temporary-audit-export-policy.json
+docvault-rbac-fixture-policy.json

@@ -49,6 +49,8 @@ from shared.tests.test_handlers import (  # noqa: E402
     TestListFilesHandler,
     TestDownloadHandler,
     TestDeleteHandler,
+    TestUpdateTagsHandler,
+    TestVersionHistoryHandler,
 )
 
 
@@ -241,7 +243,8 @@ if __name__ == "__main__":
     suite = unittest.TestSuite()
     for cls in [TestHRAdmin, TestManager, TestEmployee, TestNoGroup,
                 TestAuditRecord, TestAuditWriteFailure, TestGroupFormats,
-                TestUploadHandler, TestListFilesHandler, TestDownloadHandler, TestDeleteHandler]:
+                TestUploadHandler, TestListFilesHandler, TestDownloadHandler, TestDeleteHandler,
+                TestUpdateTagsHandler, TestVersionHistoryHandler]:
         suite.addTests(loader.loadTestsFromTestCase(cls))
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)

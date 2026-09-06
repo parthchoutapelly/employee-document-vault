@@ -1,0 +1,279 @@
+/* ─── VEYRA Sidebar Styles ─────────────────────────────────────────────── */
+
+.veyra-sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: var(--veyra-bg-sidebar);
+  color: var(--veyra-text-sidebar);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  user-select: none;
+}
+
+.veyra-sidebar__backdrop {
+  display: none;
+}
+
+/* Brand */
+.veyra-sidebar__brand {
+  padding: 1.25rem 1.25rem 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.veyra-sidebar__logo {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+}
+
+.veyra-sidebar__brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.veyra-sidebar__brand-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  line-height: 1.2;
+}
+
+.veyra-sidebar__brand-sub {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Nav sections */
+.veyra-sidebar__scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.veyra-sidebar__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.veyra-sidebar__heading {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+  padding: 0 0.5rem 0.25rem;
+}
+
+.veyra-sidebar__menu {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.veyra-sidebar__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: #94a3b8;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 120ms ease-in-out;
+}
+
+.veyra-sidebar__item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+.veyra-sidebar__item--active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+.veyra-sidebar__item--sub {
+  padding-left: 1.25rem;
+  font-size: 0.84rem;
+}
+
+.veyra-sidebar__folder-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.veyra-sidebar__count {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.veyra-sidebar__item--active .veyra-sidebar__count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* User profile section at bottom */
+.veyra-sidebar__user {
+  padding: 1rem 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.veyra-sidebar__profile {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.veyra-sidebar__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background: #334155;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.88rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.veyra-sidebar__user-details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.veyra-sidebar__user-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.veyra-sidebar__user-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 2px;
+}
+
+.veyra-sidebar__emp-id {
+  font-family: ui-monospace, 'SF Mono', monospace;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.veyra-sidebar__badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.veyra-sidebar__badge--emp {
+  background: rgba(2, 132, 199, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(2, 132, 199, 0.35);
+}
+
+.veyra-sidebar__badge--mgr {
+  background: rgba(124, 58, 237, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(124, 58, 237, 0.35);
+}
+
+.veyra-sidebar__badge--hr {
+  background: rgba(5, 150, 105, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(5, 150, 105, 0.35);
+}
+
+.veyra-sidebar__signout {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.veyra-sidebar__signout:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+/* Responsive sidebar */
+@media (max-width: 860px) {
+  .veyra-sidebar {
+    position: fixed;
+    left: -260px;
+    transition: left 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .veyra-sidebar--open {
+    left: 0;
+  }
+
+  .veyra-sidebar__backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 39;
+  }
+}

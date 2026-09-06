@@ -466,6 +466,41 @@ Resources:
                 httpMethod: POST
                 type: aws_proxy
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteFunction.Arn}/invocations"
+            patch:
+              summary: Update document tags
+              parameters:
+                - name: doc_id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+              security:
+                - CognitoAuthorizer: []
+              responses:
+                default:
+                  description: Default response
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateTagsFunction.Arn}/invocations"
+          /files/{doc_id}/versions:
+            get:
+              summary: List document version history
+              parameters:
+                - name: doc_id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+              security:
+                - CognitoAuthorizer: []
+              responses:
+                default:
+                  description: Default response
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${VersionsFunction.Arn}/invocations"
       Tags:
         Project: employee-document-vault
         Environment: !Ref Env
@@ -683,6 +718,103 @@ Resources:
             RestApiId: !Ref DocVaultApi
             Path: /files/{doc_id}
             Method: delete
+      Tags:
+        Project: employee-document-vault
+        Environment: !Ref Env
+
+  UpdateTagsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend
+      Handler: handlers.tags.handler
+      Runtime: python3.11
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          DOCUMENTS_TABLE: !Ref DocumentsTable
+          DOCUMENTS_TABLE_GSI: employee_id-index
+          AUDIT_LOG_TABLE: !Ref AuditLogTable
+          EMPLOYEES_TABLE: !Ref EmployeesTable
+          EMPLOYEES_TABLE_GSI: manager_id-index
+      Policies:
+        - Statement:
+            - Sid: DocumentsMetadataUpdate
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt DocumentsTable.Arn
+            - Sid: AuditLogWrite
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt AuditLogTable.Arn
+            - Sid: EmployeesDirectReportsRead
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !GetAtt EmployeesTable.Arn
+                - !Sub "${EmployeesTable.Arn}/index/manager_id-index"
+      Events:
+        UpdateTagsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocVaultApi
+            Path: /files/{doc_id}
+            Method: patch
+      Tags:
+        Project: employee-document-vault
+        Environment: !Ref Env
+
+  VersionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend
+      Handler: handlers.versions.handler
+      Runtime: python3.11
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          DOCUMENTS_TABLE: !Ref DocumentsTable
+          DOCUMENTS_TABLE_GSI: employee_id-index
+          AUDIT_LOG_TABLE: !Ref AuditLogTable
+          EMPLOYEES_TABLE: !Ref EmployeesTable
+          EMPLOYEES_TABLE_GSI: manager_id-index
+          DOCUMENTS_BUCKET: !Ref DocumentsBucket
+      Policies:
+        - Statement:
+            - Sid: DocumentsMetadataRead
+              Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt DocumentsTable.Arn
+            - Sid: AuditLogWrite
+              Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt AuditLogTable.Arn
+            - Sid: EmployeesDirectReportsRead
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+              Resource:
+                - !GetAtt EmployeesTable.Arn
+                - !Sub "${EmployeesTable.Arn}/index/manager_id-index"
+            - Sid: S3ListBucketVersions
+              Effect: Allow
+              Action:
+                - s3:ListBucketVersions
+              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}"
+      Events:
+        VersionsApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocVaultApi
+            Path: /files/{doc_id}/versions
+            Method: get
       Tags:
         Project: employee-document-vault
         Environment: !Ref Env

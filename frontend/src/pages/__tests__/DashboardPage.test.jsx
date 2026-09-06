@@ -23,6 +23,7 @@ vi.mock('../../services/api', async () => {
     deleteFile: vi.fn(),
     requestUpload: vi.fn(),
     uploadFileToPresignedUrl: vi.fn(),
+    getActivity: vi.fn(),
   }
 })
 
@@ -75,6 +76,18 @@ describe('DashboardPage', () => {
     vi.spyOn(api, 'deleteFile').mockResolvedValue({
       message: 'Document deleted successfully',
       document_id: 'doc-123',
+    })
+    vi.spyOn(api, 'getActivity').mockResolvedValue({
+      activity: [
+        {
+          log_id: 'log-1',
+          timestamp: 1772767200000,
+          action: 'UPLOAD_REQUESTED',
+          result: 'SUCCESS',
+          filename: 'resume_2026.pdf',
+        },
+      ],
+      count: 1,
     })
   })
 
@@ -307,15 +320,33 @@ describe('DashboardPage', () => {
     })
   })
 
-  it('renders DocumentUpload component and refreshes document list upon successful upload', async () => {
-    vi.spyOn(api, 'requestUpload').mockResolvedValue({
-      document_id: 'doc-new-1',
-      upload_url: 'https://s3.ap-south-1.amazonaws.com/presigned-put',
-      s3_key: 'documents/EMP-001/resume/my_new_cv.pdf',
-      expires_in: 900,
+  it('navigates to /documents?upload=true when clicking Primary CTA Upload Document', async () => {
+    renderDashboardPage({
+      employeeId: 'EMP-001',
+      role: 'Employee',
+      signOut: vi.fn(),
     })
-    vi.spyOn(api, 'uploadFileToPresignedUrl').mockResolvedValue({ success: true, status: 200 })
 
+    const uploadBtn = await screen.findByRole('button', { name: /upload document/i })
+    fireEvent.click(uploadBtn)
+
+    expect(mockNavigate).toHaveBeenCalledWith('/documents?upload=true')
+  })
+
+  it('navigates to /documents when clicking Secondary CTA View Documents', async () => {
+    renderDashboardPage({
+      employeeId: 'EMP-001',
+      role: 'Employee',
+      signOut: vi.fn(),
+    })
+
+    const viewDocsBtn = await screen.findByRole('button', { name: /view documents/i })
+    fireEvent.click(viewDocsBtn)
+
+    expect(mockNavigate).toHaveBeenCalledWith('/documents')
+  })
+
+  it('ensures dashboard does NOT render full document table or full document upload form', async () => {
     renderDashboardPage({
       employeeId: 'EMP-001',
       role: 'Employee',
@@ -326,53 +357,20 @@ describe('DashboardPage', () => {
       expect(screen.getByText('resume_2026.pdf')).toBeInTheDocument()
     })
 
-    // Initially 2 documents
-    expect(screen.getByTestId('dashboard-doc-count')).toHaveTextContent('2')
+    expect(screen.queryByTestId('documents-table')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('upload-type-select')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('upload-file-input')).not.toBeInTheDocument()
+  })
 
-    // Mock listFiles to return 3 documents after upload
-    vi.spyOn(api, 'listFiles').mockResolvedValue({
-      employee_id: 'EMP-001',
-      documents: [
-        ...mockDocuments,
-        {
-          document_id: 'doc-new-1',
-          employee_id: 'EMP-001',
-          filename: 'my_new_cv.pdf',
-          document_type: 'resume',
-          upload_timestamp: 1772940000000,
-          status: 'AVAILABLE',
-          s3_key: 'documents/EMP-001/resume/my_new_cv.pdf',
-        },
-      ],
-      count: 3,
+  it('fetches and displays recent activity events', async () => {
+    renderDashboardPage({
+      employeeId: 'EMP-001',
+      role: 'Employee',
+      signOut: vi.fn(),
     })
 
-    // Select document type and file in DocumentUpload
-    const typeSelect = screen.getByTestId('upload-type-select')
-    fireEvent.change(typeSelect, { target: { value: 'resume' } })
-
-    const file = new File(['cv data'], 'my_new_cv.pdf', { type: 'application/pdf' })
-    const fileInput = screen.getByTestId('upload-file-input')
-    fireEvent.change(fileInput, { target: { files: [file] } })
-
-    const uploadBtn = screen.getByTestId('upload-submit-btn')
-    fireEvent.click(uploadBtn)
-
     await waitFor(() => {
-      expect(api.requestUpload).toHaveBeenCalledWith({
-        employee_id: 'EMP-001',
-        document_type: 'resume',
-        filename: 'my_new_cv.pdf',
-      })
-      expect(api.uploadFileToPresignedUrl).toHaveBeenCalledWith(
-        'https://s3.ap-south-1.amazonaws.com/presigned-put',
-        file
-      )
-      expect(screen.getByTestId('upload-success')).toHaveTextContent(
-        '"my_new_cv.pdf" uploaded successfully.'
-      )
-      expect(screen.getByText('my_new_cv.pdf')).toBeInTheDocument()
-      expect(screen.getByTestId('dashboard-doc-count')).toHaveTextContent('3')
+      expect(screen.getByText('Document Uploaded')).toBeInTheDocument()
     })
   })
 

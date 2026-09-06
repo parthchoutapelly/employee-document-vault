@@ -8,6 +8,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
+import DocumentsPage from './pages/DocumentsPage'
+import ActivityPage from './pages/ActivityPage'
 import ProtectedRoute from './components/ProtectedRoute'
 
 export default function App() {
@@ -21,6 +23,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/documents"
+            element={
+              <ProtectedRoute>
+                <DocumentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/activity"
+            element={
+              <ProtectedRoute>
+                <ActivityPage />
               </ProtectedRoute>
             }
           />

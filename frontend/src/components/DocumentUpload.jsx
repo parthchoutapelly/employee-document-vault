@@ -21,9 +21,21 @@ import { getErrorMessage } from '../services/errorMessages'
 import './DocumentUpload.css'
 
 /**
- * @param {{ onUploadSuccess?: () => void }} props
+ * @param {{
+ *   onUploadSuccess?: () => void,
+ *   isCollapsible?: boolean,
+ *   defaultExpanded?: boolean,
+ *   isOpen?: boolean,
+ *   onToggleOpen?: (open: boolean) => void,
+ * }} props
  */
-export default function DocumentUpload({ onUploadSuccess }) {
+export default function DocumentUpload({
+  onUploadSuccess,
+  isCollapsible = false,
+  defaultExpanded = true,
+  isOpen,
+  onToggleOpen,
+}) {
   const { employeeId } = useAuthContext()
 
   const [documentType, setDocumentType] = useState('')
@@ -31,6 +43,16 @@ export default function DocumentUpload({ onUploadSuccess }) {
   const [uploading, setUploading] = useState(false)
   const [errorMessage, setErrorMessage] = useState(null)
   const [successMessage, setSuccessMessage] = useState(null)
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded)
+
+  const isExpanded = isOpen !== undefined ? isOpen : internalExpanded
+  const setExpandedState = (val) => {
+    if (onToggleOpen) {
+      onToggleOpen(val)
+    } else {
+      setInternalExpanded(val)
+    }
+  }
 
   const fileInputRef = useRef(null)
 
@@ -136,6 +158,46 @@ export default function DocumentUpload({ onUploadSuccess }) {
     }
   }
 
+  if (isCollapsible && !isExpanded) {
+    return (
+      <section className="doc-upload doc-upload--collapsed" aria-labelledby="upload-heading">
+        <div className="doc-upload__collapsed-header">
+          <div className="doc-upload__title-group">
+            <div className="doc-upload__icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                   xmlns="http://www.w3.org/2000/svg">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <polyline points="17 8 12 3 7 8"
+                          stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="12" y1="3" x2="12" y2="15"
+                      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div>
+              <h2 id="upload-heading" className="doc-upload__title">Upload Document</h2>
+              <p className="doc-upload__desc">
+                Direct-to-S3 transfer with AWS KMS encryption and automatic vault association.
+              </p>
+            </div>
+          </div>
+          <button
+            id="upload-expand-btn"
+            type="button"
+            className="doc-upload__btn doc-upload__btn--submit"
+            onClick={() => setExpandedState(true)}
+            data-testid="upload-expand-btn"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Upload Document
+          </button>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="doc-upload" aria-labelledby="upload-heading">
       <div className="doc-upload__header">
@@ -180,6 +242,21 @@ export default function DocumentUpload({ onUploadSuccess }) {
             </div>
           </div>
         </div>
+
+        {isCollapsible && (
+          <button
+            type="button"
+            className="doc-upload__close-btn"
+            onClick={() => {
+              resetForm()
+              setExpandedState(false)
+            }}
+            aria-label="Close upload form"
+            title="Collapse upload section"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {/* Error feedback */}
@@ -301,12 +378,15 @@ export default function DocumentUpload({ onUploadSuccess }) {
 
         {/* Action Buttons */}
         <div className="doc-upload__actions">
-          {(selectedFile || documentType) && !uploading && (
+          {(selectedFile || documentType || isCollapsible) && !uploading && (
             <button
               id="upload-cancel-btn"
               type="button"
               className="doc-upload__btn doc-upload__btn--cancel"
-              onClick={resetForm}
+              onClick={() => {
+                resetForm()
+                if (isCollapsible) setExpandedState(false)
+              }}
               data-testid="upload-cancel-btn"
             >
               Cancel

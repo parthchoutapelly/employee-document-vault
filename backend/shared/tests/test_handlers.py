@@ -13,6 +13,7 @@ from handlers.download import handler as download_handler
 from handlers.delete import handler as delete_handler
 from handlers.tags import handler as tags_handler
 from handlers.versions import handler as versions_handler
+from handlers.activity import handler as activity_handler
 
 
 def make_claims(employee_id: str, groups: list) -> dict:
@@ -305,6 +306,61 @@ class TestDownloadHandler(unittest.TestCase):
         self.assertEqual(body["document_id"], "doc-123")
         self.assertIn("download_url", body)
         res["s3_client"].generate_presigned_url.assert_called_once()
+        call_params = res["s3_client"].generate_presigned_url.call_args[1]["Params"]
+        self.assertEqual(call_params["ResponseContentDisposition"], 'attachment; filename="my_doc.pdf"')
+        self.assertNotIn("VersionId", call_params)
+
+    def test_download_with_version_id_passes_version_to_s3_and_audit(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-123",
+                "employee_id": "EMP-001",
+                "filename": "my_doc.pdf",
+                "document_type": "contract",
+                "s3_key": "documents/EMP-001/contract/my_doc.pdf",
+            }
+        }
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-123"},
+            "queryStringParameters": {"version_id": "v-s3-ver-999"},
+        }
+        resp = download_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["version_id"], "v-s3-ver-999")
+        call_params = res["s3_client"].generate_presigned_url.call_args[1]["Params"]
+        self.assertEqual(call_params["VersionId"], "v-s3-ver-999")
+        self.assertEqual(call_params["ResponseContentDisposition"], 'attachment; filename="my_doc.pdf"')
+
+        # Audit log includes version_id
+        audit_item = res["audit_table"].put_item.call_args[1]["Item"]
+        self.assertEqual(audit_item["action"], "FILE_DOWNLOADED")
+        self.assertIn("version_id=v-s3-ver-999", audit_item["reason"])
+
+    def test_download_image_sanitizes_filename_content_disposition(self):
+        res = make_mock_resources()
+        res["documents_table"].get_item.return_value = {
+            "Item": {
+                "document_id": "doc-img-1",
+                "employee_id": "EMP-001",
+                "filename": "Passport Scan (Official) #1.png",
+                "document_type": "identification",
+                "s3_key": "documents/EMP-001/identification/Passport_Scan__Official___1.png",
+            }
+        }
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "pathParameters": {"doc_id": "doc-img-1"},
+        }
+        resp = download_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        call_params = res["s3_client"].generate_presigned_url.call_args[1]["Params"]
+        self.assertEqual(
+            call_params["ResponseContentDisposition"],
+            'attachment; filename="Passport_Scan__Official___1.png"',
+        )
 
     def test_download_presigned_not_called_before_auth_denied(self):
         res = make_mock_resources()
@@ -816,3 +872,111 @@ class TestVersionHistoryHandler(unittest.TestCase):
         event = {"pathParameters": {"doc_id": "doc-123"}}
         resp = versions_handler(event, None, resources=res)
         self.assertEqual(resp["statusCode"], 401)
+
+
+class TestActivityHandler(unittest.TestCase):
+    def setUp(self):
+        self.sample_audit_items = [
+            {
+                "log_id": "log-1",
+                "timestamp": 1772700000000,
+                "action": "UPLOAD_REQUESTED",
+                "result": "SUCCESS",
+                "caller_user_id": "EMP-001",
+                "target_employee_id": "EMP-001",
+                "reason": "offer.pdf",
+                "filename": "offer.pdf",
+            },
+            {
+                "log_id": "log-2",
+                "timestamp": 1772800000000,
+                "action": "FILE_DOWNLOADED",
+                "result": "SUCCESS",
+                "caller_user_id": "EMP-002",
+                "target_employee_id": "EMP-002",
+                "reason": "passport.png",
+                "filename": "passport.png",
+            },
+            {
+                "log_id": "log-3",
+                "timestamp": 1772900000000,
+                "action": "ACCESS_DENIED",
+                "result": "DENIED",
+                "caller_user_id": "EMP-001",
+                "target_employee_id": "EMP-999",
+                "reason": "Unauthorized access",
+            },
+        ]
+
+    def test_activity_missing_auth_returns_401(self):
+        res = make_mock_resources()
+        event = {}
+        resp = activity_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 401)
+
+    def test_activity_unknown_role_returns_403(self):
+        res = make_mock_resources()
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["UnknownGroup"])}},
+        }
+        resp = activity_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 403)
+
+    def test_activity_employee_sees_only_own_events(self):
+        res = make_mock_resources()
+        res["audit_table"].scan.return_value = {"Items": self.sample_audit_items}
+
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+        }
+        resp = activity_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["count"], 2)
+        # Should include log-1 and log-3 (where EMP-001 is caller), but NOT log-2
+        log_ids = [item["log_id"] for item in body["activity"]]
+        self.assertIn("log-1", log_ids)
+        self.assertIn("log-3", log_ids)
+        self.assertNotIn("log-2", log_ids)
+
+    def test_activity_employee_targeting_other_forbidden(self):
+        res = make_mock_resources()
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "queryStringParameters": {"employee_id": "EMP-002"},
+        }
+        resp = activity_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 403)
+
+    def test_activity_manager_sees_direct_reports_and_self(self):
+        res = make_mock_resources(direct_reports=["EMP-002"])
+        res["audit_table"].scan.return_value = {"Items": self.sample_audit_items}
+
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-MGR1", ["Manager"])}},
+        }
+        resp = activity_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        body = json.loads(resp["body"])
+        # Should include log-2 because target/caller is EMP-002 (direct report)
+        log_ids = [item["log_id"] for item in body["activity"]]
+        self.assertIn("log-2", log_ids)
+        # Should NOT include log-1 or log-3 (EMP-001 is not direct report)
+        self.assertNotIn("log-1", log_ids)
+        self.assertNotIn("log-3", log_ids)
+
+    def test_activity_hr_admin_sees_all_events(self):
+        res = make_mock_resources()
+        res["audit_table"].scan.return_value = {"Items": self.sample_audit_items}
+
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-HR1", ["HR_Admin"])}},
+        }
+        resp = activity_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 200)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["count"], 3)
+        # Should be ordered descending by timestamp (newest first: log-3, log-2, log-1)
+        self.assertEqual(body["activity"][0]["log_id"], "log-3")
+        self.assertEqual(body["activity"][1]["log_id"], "log-2")
+        self.assertEqual(body["activity"][2]["log_id"], "log-1")

@@ -47,12 +47,36 @@ export function getApiBaseUrl() {
 
 /**
  * Retrieve current Cognito ID token string from Amplify session.
+ * Always returns a clean, trimmed token string or null.
+ *
  * @returns {Promise<string|null>}
  */
 export async function getIdToken() {
   try {
     const session = await fetchAuthSession();
-    return session?.tokens?.idToken?.toString() ?? null;
+    const idToken = session?.tokens?.idToken;
+    if (!idToken) return null;
+
+    let tokenStr = '';
+    if (typeof idToken === 'string') {
+      tokenStr = idToken;
+    } else if (typeof idToken.toString === 'function') {
+      tokenStr = idToken.toString();
+    }
+
+    tokenStr = (tokenStr || '').trim();
+
+    // Guard against malformed or non-string representations
+    if (!tokenStr || tokenStr === '[object Object]' || tokenStr === 'undefined' || tokenStr === 'null') {
+      return null;
+    }
+
+    // Strip accidental "Bearer " prefix so getIdToken strictly returns the raw token
+    if (tokenStr.startsWith('Bearer ')) {
+      tokenStr = tokenStr.slice(7).trim();
+    }
+
+    return tokenStr || null;
   } catch {
     return null;
   }
@@ -60,6 +84,15 @@ export async function getIdToken() {
 
 /**
  * Build request headers including Bearer Authorization.
+ * Validates that the token exists and constructs a clean "Bearer <ID_TOKEN>" header.
+ *
+ * Invariants:
+ *   - Never undefined/null
+ *   - Never raw token without "Bearer "
+ *   - Never an object or stringified object
+ *   - Never duplicated as "Bearer Bearer ..."
+ *   - Never populated with any unrelated auth/session value
+ *
  * @returns {Promise<Record<string, string>>}
  */
 export async function getAuthHeaders() {
@@ -67,8 +100,19 @@ export async function getAuthHeaders() {
   if (!token) {
     throw new ApiError('Authentication required: no active ID token found.', 401, 'Unauthorized');
   }
+
+  let cleanToken = String(token).trim();
+  // Strip any accidental "Bearer " prefix before standardizing
+  while (cleanToken.toLowerCase().startsWith('bearer ')) {
+    cleanToken = cleanToken.slice(7).trim();
+  }
+
+  if (!cleanToken || cleanToken === '[object Object]' || cleanToken === 'undefined' || cleanToken === 'null') {
+    throw new ApiError('Authentication required: invalid ID token format.', 401, 'Unauthorized');
+  }
+
   return {
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${cleanToken}`,
   };
 }
 
@@ -90,6 +134,18 @@ async function apiRequest(path, options = {}) {
     ...authHeaders,
     ...(options.headers || {}),
   };
+
+  // Ensure Authorization header is strictly formatted as "Bearer <token>"
+  if (headers.Authorization) {
+    let authHeader = String(headers.Authorization).trim();
+    while (authHeader.toLowerCase().startsWith('bearer bearer ')) {
+      authHeader = 'Bearer ' + authHeader.slice(14).trim();
+    }
+    if (!authHeader.startsWith('Bearer ')) {
+      authHeader = `Bearer ${authHeader}`;
+    }
+    headers.Authorization = authHeader;
+  }
 
   const fetchOptions = {
     ...options,
@@ -173,16 +229,21 @@ export async function requestUpload(payload) {
 
 /**
  * Retrieve a presigned download URL for a document.
- * Backend contract: GET /download/{doc_id}
+ * Backend contract: GET /download/{doc_id} or GET /download/{doc_id}?version_id={version_id}
  *
  * @param {string} docId
- * @returns {Promise<{ document_id: string, download_url: string, filename: string, document_type: string, expires_in: number }>}
+ * @param {string} [versionId=null]
+ * @returns {Promise<{ document_id: string, download_url: string, filename: string, document_type: string, version_id?: string, expires_in: number }>}
  */
-export async function getDownloadUrl(docId) {
+export async function getDownloadUrl(docId, versionId = null) {
   if (!docId || typeof docId !== 'string') {
     throw new ApiError('doc_id is required', 400, 'BadRequest');
   }
-  return apiRequest(`/download/${encodeURIComponent(docId.trim())}`, {
+  const cleanDocId = encodeURIComponent(docId.trim());
+  const query = versionId && String(versionId).trim()
+    ? `?version_id=${encodeURIComponent(String(versionId).trim())}`
+    : '';
+  return apiRequest(`/download/${cleanDocId}${query}`, {
     method: 'GET',
   });
 }
@@ -310,6 +371,25 @@ export async function getDocumentVersions(docId) {
     throw new ApiError('doc_id is required', 400, 'BadRequest');
   }
   return apiRequest(`/files/${encodeURIComponent(docId.trim())}/versions`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * Retrieve audit and security activity history.
+ * Backend contract: GET /activity
+ *
+ * @param {Object} [params]
+ * @param {string} [params.employee_id]
+ * @param {number} [params.limit]
+ * @returns {Promise<{ activity: Array<any>, count: number, total_available?: number }>}
+ */
+export async function getActivity(params = {}) {
+  const query = new URLSearchParams();
+  if (params.employee_id) query.set('employee_id', params.employee_id);
+  if (params.limit) query.set('limit', String(params.limit));
+  const qs = query.toString();
+  return apiRequest(`/activity${qs ? `?${qs}` : ''}`, {
     method: 'GET',
   });
 }

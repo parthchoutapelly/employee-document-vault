@@ -11,7 +11,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import DashboardPage from '../DashboardPage'
+import DocumentsPage from '../DocumentsPage'
 import { AuthContext } from '../../context/AuthContext'
 import * as api from '../../services/api'
 
@@ -41,7 +41,7 @@ function renderDashboard(authValue = {}) {
   return render(
     <AuthContext.Provider value={defaultAuth}>
       <MemoryRouter>
-        <DashboardPage />
+        <DocumentsPage />
       </MemoryRouter>
     </AuthContext.Provider>
   )
@@ -326,6 +326,41 @@ describe('VEYRA Document Browser & Specification Features', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('v2-active-s3-12345')).not.toBeInTheDocument()
+    })
+  })
+
+  it('downloads specific object version when Download Version is clicked in VersionHistoryDrawer', async () => {
+    vi.spyOn(window, 'open').mockImplementation(() => null)
+    vi.spyOn(api, 'getDownloadUrl').mockResolvedValueOnce({
+      document_id: 'doc-1',
+      version_id: 'v2-active-s3-12345',
+      download_url: 'https://s3.ap-south-1.amazonaws.com/test-version-download',
+      filename: 'Offer_Letter_2026.pdf',
+    })
+
+    renderDashboard()
+
+    await waitFor(() => {
+      expect(screen.getByText('Offer_Letter_2026.pdf')).toBeInTheDocument()
+    })
+
+    const historyBtn = screen.getByRole('button', { name: /view version history for Offer_Letter_2026\.pdf/i })
+    fireEvent.click(historyBtn)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('download-version-btn-v2-active-s3-12345')).toBeInTheDocument()
+    })
+
+    const downloadVerBtn = screen.getByTestId('download-version-btn-v2-active-s3-12345')
+    fireEvent.click(downloadVerBtn)
+
+    await waitFor(() => {
+      expect(api.getDownloadUrl).toHaveBeenCalledWith('doc-1', 'v2-active-s3-12345')
+      expect(window.open).toHaveBeenCalledWith(
+        'https://s3.ap-south-1.amazonaws.com/test-version-download',
+        '_blank',
+        'noopener,noreferrer'
+      )
     })
   })
 

@@ -21,37 +21,40 @@ function formatTimestamp(ts) {
 
 export default function VersionHistoryDrawer({
   isOpen,
-  document: doc,
+  document: docProp,
+  doc: docAlias,
   onClose,
   onDownload,
   isDownloading,
 }) {
+  const doc = docProp || docAlias
+  const docId = doc?.document_id
   const [versions, setVersions] = useState([])
   const [loadingVersions, setLoadingVersions] = useState(true)
   const [versionError, setVersionError] = useState(null)
 
   const fetchVersions = useCallback(async () => {
-    if (!doc?.document_id) return
+    if (!docId) return
     setLoadingVersions(true)
     setVersionError(null)
     try {
-      const data = await getDocumentVersions(doc.document_id)
+      const data = await getDocumentVersions(docId)
       setVersions(Array.isArray(data?.versions) ? data.versions : [])
     } catch (err) {
       setVersionError(getErrorMessage(err, 'Failed to retrieve version history from S3.'))
     } finally {
       setLoadingVersions(false)
     }
-  }, [doc?.document_id])
+  }, [docId])
 
   useEffect(() => {
-    if (isOpen && doc?.document_id) {
+    if (isOpen && docId) {
       fetchVersions()
     } else {
       setVersions([])
       setVersionError(null)
     }
-  }, [isOpen, doc?.document_id, fetchVersions])
+  }, [isOpen, docId, fetchVersions])
 
   if (!isOpen || !doc) return null
 
@@ -245,8 +248,10 @@ export default function VersionHistoryDrawer({
                             <button
                               type="button"
                               className="veyra-btn veyra-btn--sm veyra-btn--primary"
-                              onClick={() => onDownload?.(doc.document_id)}
+                              onClick={() => onDownload?.(doc.document_id, ver.version_id)}
                               disabled={isDownloading}
+                              aria-label={`Download version ${ver.version_id} of ${doc.filename || 'document'}`}
+                              data-testid={`download-version-btn-${ver.version_id}`}
                             >
                               {isDownloading ? 'Downloading…' : 'Download Version'}
                             </button>

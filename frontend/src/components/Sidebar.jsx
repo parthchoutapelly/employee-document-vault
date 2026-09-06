@@ -4,6 +4,7 @@
  * Left navigation sidebar for VEYRA Employee Document Workspace.
  * Provides folder-tree document filtering, navigation links, and dynamic user identity.
  */
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthContext } from '../context/AuthContext'
 import { roleLabel, ROLES } from '../services/authUtils'
 import { DOCUMENT_FOLDERS } from '../services/fileUtils'
@@ -19,6 +20,14 @@ export default function Sidebar({
   onCloseMobile,
 }) {
   const { employeeId, role, signOut, user } = useAuthContext()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const currentPath = location?.pathname || ''
+  const isDashboardRoute = currentPath === '/' || currentPath.startsWith('/dashboard')
+  const isDocumentsRoute = currentPath.startsWith('/documents')
+  const isActivityRoute = currentPath.startsWith('/activity')
+  const effectiveView = isDashboardRoute ? 'dashboard' : (isDocumentsRoute ? 'documents' : (isActivityRoute ? 'activity' : activeView))
 
   const displayName = user?.name || user?.attributes?.name || user?.email?.split('@')[0] || (employeeId ? `User ${employeeId}` : 'Employee')
 
@@ -26,11 +35,21 @@ export default function Sidebar({
     onSelectFolder?.(folderId)
     onSelectView?.('documents')
     onCloseMobile?.()
+    if (!isDocumentsRoute || folderId !== activeFolder) {
+      navigate(folderId === 'all' ? '/documents' : `/documents?folder=${folderId}`)
+    }
   }
 
   const handleNavClick = (viewId) => {
     onSelectView?.(viewId)
     onCloseMobile?.()
+    if (viewId === 'dashboard') {
+      navigate('/dashboard')
+    } else if (viewId === 'documents') {
+      navigate('/documents')
+    } else if (viewId === 'activity') {
+      navigate('/activity')
+    }
   }
 
   const roleModifier = () => {
@@ -71,10 +90,11 @@ export default function Sidebar({
             <ul className="veyra-sidebar__menu">
               <li>
                 <button
+                  id="sidebar-nav-dashboard"
                   type="button"
-                  className={`veyra-sidebar__item ${activeView === 'dashboard' ? 'veyra-sidebar__item--active' : ''}`}
+                  className={`veyra-sidebar__item ${effectiveView === 'dashboard' ? 'veyra-sidebar__item--active' : ''}`}
                   onClick={() => handleNavClick('dashboard')}
-                  aria-current={activeView === 'dashboard' ? 'page' : undefined}
+                  aria-current={effectiveView === 'dashboard' ? 'page' : undefined}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -87,10 +107,11 @@ export default function Sidebar({
               </li>
               <li>
                 <button
+                  id="sidebar-nav-documents"
                   type="button"
-                  className={`veyra-sidebar__item ${activeView === 'documents' && activeFolder === 'all' ? 'veyra-sidebar__item--active' : ''}`}
+                  className={`veyra-sidebar__item ${effectiveView === 'documents' && activeFolder === 'all' ? 'veyra-sidebar__item--active' : ''}`}
                   onClick={() => handleFolderClick('all')}
-                  aria-current={activeView === 'documents' && activeFolder === 'all' ? 'page' : undefined}
+                  aria-current={effectiveView === 'documents' && activeFolder === 'all' ? 'page' : undefined}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -101,10 +122,11 @@ export default function Sidebar({
               </li>
               <li>
                 <button
+                  id="sidebar-nav-activity"
                   type="button"
-                  className={`veyra-sidebar__item ${activeView === 'activity' ? 'veyra-sidebar__item--active' : ''}`}
+                  className={`veyra-sidebar__item ${effectiveView === 'activity' ? 'veyra-sidebar__item--active' : ''}`}
                   onClick={() => handleNavClick('activity')}
-                  aria-current={activeView === 'activity' ? 'page' : undefined}
+                  aria-current={effectiveView === 'activity' ? 'page' : undefined}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -120,7 +142,7 @@ export default function Sidebar({
             <span className="veyra-sidebar__heading">Document Folders</span>
             <ul className="veyra-sidebar__menu">
               {DOCUMENT_FOLDERS.filter((f) => f.id !== 'all').map((folder) => {
-                const isSelected = activeView === 'documents' && activeFolder === folder.id
+                const isSelected = effectiveView === 'documents' && activeFolder === folder.id
                 const count = folderCounts[folder.id] ?? 0
                 return (
                   <li key={folder.id}>

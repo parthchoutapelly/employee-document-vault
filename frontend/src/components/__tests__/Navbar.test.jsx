@@ -62,4 +62,40 @@ describe('Navbar', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/login', { replace: true })
     })
   })
+
+  it('renders breadcrumbs and security compliance indicators', () => {
+    renderNavbar({
+      employeeId: 'EMP-001',
+      role: 'Employee',
+      signOut: vi.fn(),
+    })
+
+    expect(screen.getByText('Workspace')).toBeInTheDocument()
+    expect(screen.getByText('Documents')).toBeInTheDocument()
+    expect(screen.getByText('KMS Encrypted')).toBeInTheDocument()
+    expect(screen.getByText('RBAC Active')).toBeInTheDocument()
+  })
+
+  it('conditionally controls search input rendering with showSearch prop', () => {
+    const { rerender } = render(
+      <AuthContext.Provider value={{ employeeId: 'EMP-001', role: 'Employee', signOut: vi.fn() }}>
+        <MemoryRouter>
+          <Navbar showSearch={false} />
+        </MemoryRouter>
+      </AuthContext.Provider>
+    )
+
+    expect(screen.queryByTestId('documents-search-input')).not.toBeInTheDocument()
+
+    rerender(
+      <AuthContext.Provider value={{ employeeId: 'EMP-001', role: 'Employee', signOut: vi.fn() }}>
+        <MemoryRouter>
+          <Navbar showSearch={true} searchValue="test query" onSearchChange={vi.fn()} />
+        </MemoryRouter>
+      </AuthContext.Provider>
+    )
+
+    expect(screen.getByTestId('documents-search-input')).toBeInTheDocument()
+    expect(screen.getByTestId('documents-search-input')).toHaveValue('test query')
+  })
 })

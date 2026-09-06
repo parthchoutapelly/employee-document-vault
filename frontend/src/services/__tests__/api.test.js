@@ -8,6 +8,7 @@ import {
   uploadFileToPresignedUrl,
   updateDocumentTags,
   getDocumentVersions,
+  getActivity,
   getAuthHeaders,
   ApiError,
   getApiBaseUrl,
@@ -71,6 +72,22 @@ describe('API client (services/api.js)', () => {
         expect(err.status).toBe(401);
         expect(err.isUnauthorized).toBe(true);
       }
+    });
+
+    it('normalizes tokens that already contain Bearer prefix without duplicating it', async () => {
+      vi.spyOn(amplifyAuth, 'fetchAuthSession').mockResolvedValue({
+        tokens: { idToken: `Bearer ${MOCK_TOKEN}` },
+      });
+      const headers = await getAuthHeaders();
+      expect(headers.Authorization).toBe(`Bearer ${MOCK_TOKEN}`);
+      expect(headers.Authorization).not.toContain('Bearer Bearer');
+    });
+
+    it('throws 401 when token is an invalid object string representation or null', async () => {
+      vi.spyOn(amplifyAuth, 'fetchAuthSession').mockResolvedValue({
+        tokens: { idToken: '[object Object]' },
+      });
+      await expect(getAuthHeaders()).rejects.toThrow(ApiError);
     });
   });
 
@@ -199,6 +216,23 @@ describe('API client (services/api.js)', () => {
       await getDownloadUrl('doc/special+1');
       const [url] = global.fetch.mock.calls[0];
       expect(url).toBe(`${BASE_URL}/download/doc%2Fspecial%2B1`);
+    });
+
+    it('appends version_id query parameter when versionId is provided', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          document_id: 'doc-123',
+          version_id: 'v-s3-ver-999',
+          download_url: 'https://s3.ap-south-1.amazonaws.com/presigned-version-url',
+        }),
+      });
+
+      await getDownloadUrl('doc-123', 'v-s3-ver-999');
+      const [url] = global.fetch.mock.calls[0];
+      expect(url).toBe(`${BASE_URL}/download/doc-123?version_id=v-s3-ver-999`);
     });
   });
 
@@ -407,6 +441,92 @@ describe('API client (services/api.js)', () => {
 
     it('rejects with 400 when docId is missing', async () => {
       await expect(getDocumentVersions('')).rejects.toThrow(ApiError);
+    });
+  });
+
+  describe('getActivity', () => {
+    it('sends GET /activity with Authorization header', async () => {
+      const mockResponse = {
+        activity: [
+          {
+            log_id: 'log-1',
+            action: 'UPLOAD_REQUESTED',
+            result: 'SUCCESS',
+            timestamp: 1772700000000,
+          },
+        ],
+        count: 1,
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => mockResponse,
+      });
+
+      const result = await getActivity();
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const [url, options] = global.fetch.mock.calls[0];
+      expect(url).toBe(`${BASE_URL}/activity`);
+      expect(options.method).toBe('GET');
+      expect(options.headers.Authorization).toBe(`Bearer ${MOCK_TOKEN}`);
+      expect(result).toEqual(mockResponse);
+    });
+
+    it('appends query parameters when employee_id and limit are provided', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ activity: [], count: 0 }),
+      });
+
+      await getActivity({ employee_id: 'EMP-002', limit: 25 });
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const [url] = global.fetch.mock.calls[0];
+      expect(url).toBe(`${BASE_URL}/activity?employee_id=EMP-002&limit=25`);
+    });
+
+    it('uses the same auth/session mechanism as existing API calls (fetchAuthSession)', async () => {
+      const authSpy = vi.spyOn(amplifyAuth, 'fetchAuthSession');
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ activity: [], count: 0 }),
+      });
+
+      await getActivity();
+      expect(authSpy).toHaveBeenCalled();
+    });
+
+    it('handles missing/expired authentication consistently (throws 401 ApiError)', async () => {
+      vi.spyOn(amplifyAuth, 'fetchAuthSession').mockResolvedValue({});
+      await expect(getActivity()).rejects.toThrow(ApiError);
+      try {
+        await getActivity();
+      } catch (err) {
+        expect(err.status).toBe(401);
+        expect(err.isUnauthorized).toBe(true);
+      }
+    });
+
+    it('ensures Authorization header strictly starts with Bearer and contains clean token', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ activity: [], count: 0 }),
+      });
+
+      await getActivity();
+      const [, options] = global.fetch.mock.calls[0];
+      expect(options.headers.Authorization).toMatch(/^Bearer [a-zA-Z0-9._-]+$/);
+      expect(options.headers.Authorization).not.toContain('Bearer Bearer');
+      expect(options.headers.Authorization).not.toContain('[object');
     });
   });
 

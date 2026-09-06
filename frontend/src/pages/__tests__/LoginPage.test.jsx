@@ -48,7 +48,37 @@ describe('LoginPage', () => {
 
     expect(screen.getByLabelText(/work email/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
+    const emailInput = screen.getByLabelText(/work email/i)
+    const passwordInput = screen.getByLabelText(/password/i)
+    expect(emailInput).toHaveClass('login-form__input')
+    expect(emailInput).toHaveAttribute('type', 'email')
+    expect(passwordInput).toHaveClass('login-form__input')
+    expect(passwordInput).toHaveAttribute('type', 'password')
+
     const submitBtn = screen.getByRole('button', { name: /sign in/i })
+    expect(submitBtn).toBeDisabled()
+    expect(submitBtn).toHaveAttribute('id', 'sign-in-btn')
+  })
+
+  it('keeps submit button disabled if only email or only password is entered', () => {
+    renderLoginPage({
+      isAuthenticated: false,
+      loading: false,
+      signIn: vi.fn(),
+      error: null,
+    })
+
+    const emailInput = screen.getByLabelText(/work email/i)
+    const passwordInput = screen.getByLabelText(/password/i)
+    const submitBtn = screen.getByRole('button', { name: /sign in/i })
+
+    // Only email
+    fireEvent.change(emailInput, { target: { value: 'emp001@example.com' } })
+    expect(submitBtn).toBeDisabled()
+
+    // Reset email, only password
+    fireEvent.change(emailInput, { target: { value: '' } })
+    fireEvent.change(passwordInput, { target: { value: 'Secret123!' } })
     expect(submitBtn).toBeDisabled()
   })
 
@@ -68,6 +98,39 @@ describe('LoginPage', () => {
     fireEvent.change(passwordInput, { target: { value: 'Secret123!' } })
 
     expect(submitBtn).not.toBeDisabled()
+  })
+
+  it('shows loading state and disables inputs during submit', async () => {
+    let resolveSignIn
+    const signInPromise = new Promise((resolve) => {
+      resolveSignIn = resolve
+    })
+    const signInMock = vi.fn().mockReturnValue(signInPromise)
+
+    renderLoginPage({
+      isAuthenticated: false,
+      loading: false,
+      signIn: signInMock,
+      error: null,
+    })
+
+    const emailInput = screen.getByLabelText(/work email/i)
+    const passwordInput = screen.getByLabelText(/password/i)
+    const submitBtn = screen.getByRole('button', { name: /sign in/i })
+
+    fireEvent.change(emailInput, { target: { value: 'emp001@example.com' } })
+    fireEvent.change(passwordInput, { target: { value: 'Secret123!' } })
+    fireEvent.click(submitBtn)
+
+    expect(submitBtn).toBeDisabled()
+    expect(screen.getByText(/authenticating…/i)).toBeInTheDocument()
+    expect(emailInput).toBeDisabled()
+    expect(passwordInput).toBeDisabled()
+
+    resolveSignIn({ username: 'emp001@example.com' })
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true })
+    })
   })
 
   it('calls signIn and navigates to /dashboard on successful login', async () => {

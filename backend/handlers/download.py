@@ -46,13 +46,20 @@ def handler(event: Dict[str, Any], context: Any, resources: Optional[Dict[str, A
 
         caller_employee_id = caller.get("custom:employee_id", caller.get("sub", "UNKNOWN"))
 
-        # 2. Extract doc_id
+        # 2. Extract doc_id and optional version_id
         path_params = event.get("pathParameters") or {}
         doc_id = path_params.get("doc_id")
         if not doc_id or not isinstance(doc_id, str) or not doc_id.strip():
             return bad_request("doc_id path parameter is required")
 
         doc_id = doc_id.strip()
+
+        query_params = event.get("queryStringParameters") or {}
+        version_id = None
+        if isinstance(query_params, dict):
+            raw_version = query_params.get("version_id")
+            if isinstance(raw_version, str) and raw_version.strip():
+                version_id = raw_version.strip()
 
         # 3. Resources
         res = resources or _get_resources()
@@ -85,31 +92,42 @@ def handler(event: Dict[str, Any], context: Any, resources: Optional[Dict[str, A
             return forbidden("You are not authorized to download this document")
 
         # 6. Generate presigned download URL
+        filename = item.get("filename")
         download_url = generate_presigned_download_url(
             s3_client=s3_client,
             bucket=bucket,
             key=s3_key,
             expires_in=900,
+            filename=filename,
+            version_id=version_id,
         )
 
         # 7. Audit Log
+        reason_str = f"document_id={doc_id}"
+        if version_id:
+            reason_str += f" version_id={version_id}"
+
         write_audit_log(
             audit_table=audit_table,
             action="FILE_DOWNLOADED",
             result="SUCCESS",
             caller_user_id=caller_employee_id,
             target_employee_id=target_employee_id,
-            reason=f"document_id={doc_id}",
+            reason=reason_str,
             cognito_sub=caller.get("sub", "UNKNOWN"),
         )
 
-        return success({
+        resp_payload: Dict[str, Any] = {
             "document_id": doc_id,
             "download_url": download_url,
-            "filename": item.get("filename"),
+            "filename": filename,
             "document_type": item.get("document_type"),
             "expires_in": 900,
-        })
+        }
+        if version_id:
+            resp_payload["version_id"] = version_id
+
+        return success(resp_payload)
 
     except Exception as exc:
         logger.error("Unexpected error in download handler: %s", exc, exc_info=True)

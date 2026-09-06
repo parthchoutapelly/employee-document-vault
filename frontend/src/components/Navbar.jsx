@@ -2,7 +2,12 @@
  * Navbar.jsx
  *
  * Top navigation / header bar for VEYRA Employee Document Workspace.
- * Displays breadcrumbs, compliance status, employee identity, and sign-out.
+ * Features:
+ * - Breadcrumbs
+ * - Primary navigation tabs (Dashboard | Documents)
+ * - Metadata search (when enabled)
+ * - Compliance status (KMS, RBAC, TLS)
+ * - Employee identity and Sign Out button
  */
 import { useNavigate } from 'react-router-dom'
 import { useAuthContext } from '../context/AuthContext'
@@ -62,7 +67,7 @@ export default function Navbar({
         </nav>
       </div>
 
-      {/* Center Search Input */}
+      {/* Center Search Input (Shown on Documents workspace) */}
       {showSearch && (
         <div className="veyra-topbar__search">
           <svg className="veyra-topbar__search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -72,6 +77,7 @@ export default function Navbar({
           <input
             type="search"
             className="veyra-topbar__search-input"
+            data-testid="documents-search-input"
             placeholder="Search documents by name, type, or tags…"
             value={searchValue}
             onChange={(e) => onSearchChange?.(e.target.value)}

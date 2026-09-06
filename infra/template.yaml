@@ -113,6 +113,18 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - "http://localhost:5173"
+            AllowedMethods:
+              - GET
+              - PUT
+              - HEAD
+            AllowedHeaders:
+              - "*"
+            ExposedHeaders:
+              - ETag
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -501,6 +513,18 @@ Resources:
                 httpMethod: POST
                 type: aws_proxy
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${VersionsFunction.Arn}/invocations"
+          /activity:
+            get:
+              summary: Get security and document activity history
+              security:
+                - CognitoAuthorizer: []
+              responses:
+                default:
+                  description: Default response
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ActivityFunction.Arn}/invocations"
       Tags:
         Project: employee-document-vault
         Environment: !Ref Env
@@ -653,6 +677,7 @@ Resources:
               Effect: Allow
               Action:
                 - s3:GetObject
+                - s3:GetObjectVersion
               Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/*"
             - Sid: KmsDecrypt
               Effect: Allow
@@ -814,6 +839,46 @@ Resources:
           Properties:
             RestApiId: !Ref DocVaultApi
             Path: /files/{doc_id}/versions
+            Method: get
+      Tags:
+        Project: employee-document-vault
+        Environment: !Ref Env
+
+  ActivityFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend
+      Handler: handlers.activity.handler
+      Runtime: python3.11
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          AUDIT_LOG_TABLE: !Ref AuditLogTable
+          EMPLOYEES_TABLE: !Ref EmployeesTable
+          EMPLOYEES_TABLE_GSI: manager_id-index
+      Policies:
+        - Statement:
+            - Sid: AuditLogRead
+              Effect: Allow
+              Action:
+                - dynamodb:Scan
+                - dynamodb:Query
+              Resource: !GetAtt AuditLogTable.Arn
+            - Sid: EmployeesDirectReportsRead
+              Effect: Allow
+              Action:
+                - dynamodb:Query
+                - dynamodb:GetItem
+              Resource:
+                - !GetAtt EmployeesTable.Arn
+                - !Sub "${EmployeesTable.Arn}/index/manager_id-index"
+      Events:
+        ActivityApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocVaultApi
+            Path: /activity
             Method: get
       Tags:
         Project: employee-document-vault

@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 16px;
+  padding: 40px 20px;
   background-color: var(--veyra-bg-app, #f8fafc);
   position: relative;
 }
@@ -15,11 +15,11 @@
 .login-card {
   width: 100%;
   max-width: 440px;
-  margin-bottom: 8vh;
-  background: var(--veyra-bg-surface, #ffffff);
-  border: 1px solid var(--veyra-border-subtle, #e2e8f0);
+  margin: 0 auto;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
   border-radius: var(--radius-lg, 12px);
-  padding: 36px 32px 28px;
+  padding: 40px 36px 32px;
   box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
   position: relative;
   z-index: 1;
@@ -34,7 +34,7 @@
 .login-card__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
@@ -42,33 +42,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   background: var(--veyra-accent-subtle, #eff6ff);
-  border: 1px solid var(--veyra-accent-border, #bfdbfe);
+  border: 1.5px solid var(--veyra-accent-border, #bfdbfe);
   border-radius: var(--radius-sm, 6px);
 }
 
 .login-card__brand-name {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   color: var(--veyra-text-primary, #0f172a);
 }
 
 .login-card__title {
-  font-size: 1.35rem;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--veyra-text-primary, #0f172a);
   letter-spacing: -0.02em;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 
 .login-card__subtitle {
   font-size: 0.875rem;
   color: var(--veyra-text-secondary, #475569);
   margin-top: 6px;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 /* ─── Error banner ──────────────────────────────────────────────────────── */
@@ -97,13 +97,13 @@
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
 }
 
 .login-form__group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .login-form__label-row {
@@ -113,21 +113,23 @@
 }
 
 .login-form__label {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: var(--veyra-text-secondary, #334155);
+  color: #1e293b;
   letter-spacing: 0.01em;
 }
 
+/* Visible, clearly defined inputs */
 .login-form__input {
   width: 100%;
-  height: 42px;
+  height: 44px;
   padding: 10px 14px;
   background: #ffffff;
-  border: 1.5px solid var(--border, #cbd5e1);
+  border: 1.5px solid #94a3b8;
   border-radius: var(--radius-sm, 6px);
-  color: var(--veyra-text-primary, #0f172a);
+  color: #0f172a;
   font-size: 0.9375rem;
+  font-weight: 500;
   font-family: inherit;
   outline: none;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -136,22 +138,23 @@
 }
 
 .login-form__input:hover:not(:disabled) {
-  border-color: #94a3b8;
+  border-color: #64748b;
 }
 
 .login-form__input:focus {
   border-color: var(--veyra-accent, #2563eb);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16), 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 0 0 3.5px rgba(37, 99, 235, 0.18), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .login-form__input::placeholder {
-  color: var(--veyra-text-muted, #94a3b8);
+  color: #94a3b8;
+  font-weight: 400;
 }
 
 .login-form__input:disabled {
-  opacity: 0.7;
-  background: var(--veyra-bg-subtle, #f1f5f9);
-  border-color: var(--veyra-border-subtle, #e2e8f0);
+  opacity: 0.75;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
   cursor: not-allowed;
 }
 
@@ -161,7 +164,7 @@
   width: 100%;
   height: 44px;
   padding: 0 16px;
-  margin-top: 6px;
+  margin-top: 8px;
   border-radius: var(--radius-sm, 6px);
   font-size: 0.9375rem;
   font-weight: 600;
@@ -176,19 +179,19 @@
               transform 100ms ease;
 }
 
-/* Enabled state: high-contrast primary VEYRA Blue with crisp white text */
+/* Actionable / Enabled state: Rich VEYRA Blue */
 .login-form__submit:not(:disabled) {
   background-color: var(--veyra-accent, #2563eb);
   color: #ffffff;
   border: 1px solid var(--veyra-accent-hover, #1d4ed8);
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3), 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 .login-form__submit:not(:disabled):hover {
   background-color: var(--veyra-accent-hover, #1d4ed8);
   border-color: #1e40af;
-  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35);
 }
 
 .login-form__submit:not(:disabled):active {
@@ -201,14 +204,14 @@
   outline-offset: 2px;
 }
 
-/* Disabled state: clearly structured, intentional slate disabled appearance */
+/* Disabled state: Intentionally structured, readable contrast */
 .login-form__submit:disabled {
   background-color: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #94a3b8;
+  border: 1.5px solid #cbd5e1;
+  color: #64748b;
   box-shadow: none;
   cursor: not-allowed;
-  opacity: 1;
+  opacity: 0.9;
   transform: none;
 }
 
@@ -219,6 +222,7 @@
   border-color: #1e40af;
   color: #ffffff;
   cursor: wait;
+  opacity: 1;
 }
 
 .login-btn-spinner {
@@ -237,18 +241,18 @@
   align-items: center;
   justify-content: center;
   gap: 16px;
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--veyra-border-subtle, #e2e8f0);
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .trust-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.75rem;
+  gap: 6px;
+  font-size: 0.78rem;
   font-weight: 500;
-  color: var(--veyra-text-secondary, #64748b);
+  color: #475569;
 }
 
 .trust-badge svg {
@@ -260,8 +264,8 @@
 .login-card__footer {
   text-align: center;
   font-size: 0.75rem;
-  color: var(--veyra-text-muted, #94a3b8);
-  margin-top: 16px;
+  color: #94a3b8;
+  margin-top: 18px;
   line-height: 1.4;
 }
 
@@ -277,7 +281,7 @@
 .page-loader__spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--veyra-border-subtle, #e2e8f0);
+  border: 3px solid #e2e8f0;
   border-top-color: var(--veyra-accent, #2563eb);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -287,8 +291,7 @@
 
 @media (max-width: 480px) {
   .login-card {
-    margin-bottom: 0;
-    padding: 28px 20px 24px;
+    padding: 30px 22px 24px;
     border-radius: 10px;
   }
 

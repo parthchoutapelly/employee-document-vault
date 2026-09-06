@@ -72,6 +72,8 @@ def generate_presigned_download_url(
     bucket: str,
     key: str,
     expires_in: int = 900,
+    filename: Optional[str] = None,
+    version_id: Optional[str] = None,
 ) -> str:
     """
     Generate an S3 presigned GET URL for direct-from-S3 download.
@@ -82,17 +84,26 @@ def generate_presigned_download_url(
     bucket : S3 bucket name
     key : Source S3 object key
     expires_in : URL expiration in seconds (default: 15 minutes)
+    filename : Optional original filename for Content-Disposition header
+    version_id : Optional S3 object version ID to download specific version
 
     Returns
     -------
     Presigned download URL string
     """
+    params: Dict[str, Any] = {
+        "Bucket": bucket,
+        "Key": key,
+    }
+    if filename:
+        clean_fn = sanitize_filename(filename)
+        params["ResponseContentDisposition"] = f'attachment; filename="{clean_fn}"'
+    if version_id:
+        params["VersionId"] = version_id
+
     return s3_client.generate_presigned_url(
         ClientMethod="get_object",
-        Params={
-            "Bucket": bucket,
-            "Key": key,
-        },
+        Params=params,
         ExpiresIn=expires_in,
     )
 

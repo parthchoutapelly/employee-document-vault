@@ -266,6 +266,57 @@ describe('API client (services/api.js)', () => {
       expect(options.headers['x-amz-server-side-encryption']).toBe('aws:kms');
     });
 
+    it('attaches required KMS headers (SSE and SSEKMSKeyId) when passed via extraHeaders', async () => {
+      const mockS3Url = 'https://s3.ap-south-1.amazonaws.com/docvault-bucket/doc.pdf';
+      const mockFile = new File(['file contents'], 'resume.pdf', { type: 'application/pdf' });
+      const extraHeaders = {
+        'x-amz-server-side-encryption': 'aws:kms',
+        'x-amz-server-side-encryption-aws-kms-key-id': '40ee685d-515e-48b4-891f-6142ff9c97e2',
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+      });
+
+      await uploadFileToPresignedUrl(mockS3Url, mockFile, extraHeaders);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const [, options] = global.fetch.mock.calls[0];
+      expect(options.headers['Content-Type']).toBe('application/pdf');
+      expect(options.headers['x-amz-server-side-encryption']).toBe('aws:kms');
+      expect(options.headers['x-amz-server-side-encryption-aws-kms-key-id']).toBe(
+        '40ee685d-515e-48b4-891f-6142ff9c97e2'
+      );
+      expect(options.headers.Authorization).toBeUndefined();
+    });
+
+    it('never forwards Authorization header to S3 even if included in extraHeaders', async () => {
+      const mockS3Url = 'https://s3.ap-south-1.amazonaws.com/docvault-bucket/doc.pdf';
+      const mockFile = new File(['file contents'], 'resume.pdf', { type: 'application/pdf' });
+      const extraHeaders = {
+        Authorization: 'Bearer leaked-token',
+        authorization: 'Bearer leaked-token-lower',
+        'x-amz-server-side-encryption': 'aws:kms',
+        'x-amz-server-side-encryption-aws-kms-key-id': '40ee685d-515e-48b4-891f-6142ff9c97e2',
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+      });
+
+      await uploadFileToPresignedUrl(mockS3Url, mockFile, extraHeaders);
+
+      const [, options] = global.fetch.mock.calls[0];
+      expect(options.headers.Authorization).toBeUndefined();
+      expect(options.headers.authorization).toBeUndefined();
+      expect(options.headers['x-amz-server-side-encryption']).toBe('aws:kms');
+      expect(options.headers['x-amz-server-side-encryption-aws-kms-key-id']).toBe(
+        '40ee685d-515e-48b4-891f-6142ff9c97e2'
+      );
+    });
+
     it('throws ApiError with S3UploadError when S3 responds with non-2xx status', async () => {
       const mockS3Url = 'https://s3.ap-south-1.amazonaws.com/bucket/key';
       const mockFile = new File(['content'], 'file.txt', { type: 'text/plain' });

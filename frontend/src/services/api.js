@@ -210,14 +210,15 @@ export async function deleteFile(docId) {
  *   - Direct S3 PUT — bypasses API Gateway and Lambda.
  *   - Does NOT attach Cognito Authorization headers.
  *   - Sets Content-Type according to file.type.
- *   - Automatically attaches required KMS headers if signed in the presigned URL.
+ *   - Automatically attaches required KMS headers returned by /upload or in URL.
  *   - Never logs the presigned URL.
  *
  * @param {string} uploadUrl - Presigned S3 PUT URL
  * @param {File|Blob} file - File or Blob instance
+ * @param {Record<string, string>} [extraHeaders={}] - Additional signed headers (e.g. KMS headers from POST /upload)
  * @returns {Promise<{ success: boolean, status: number }>}
  */
-export async function uploadFileToPresignedUrl(uploadUrl, file) {
+export async function uploadFileToPresignedUrl(uploadUrl, file, extraHeaders = {}) {
   if (!uploadUrl || typeof uploadUrl !== 'string') {
     throw new ApiError('Upload URL is required', 400, 'BadRequest');
   }
@@ -238,6 +239,16 @@ export async function uploadFileToPresignedUrl(uploadUrl, file) {
     }
   } catch {
     // Relative or test mock URL — continue safely
+  }
+
+  // Merge required signed headers (e.g., KMS key ID and SSE encryption from POST /upload)
+  if (extraHeaders && typeof extraHeaders === 'object') {
+    for (const [key, value] of Object.entries(extraHeaders)) {
+      // Security guard: Never leak Cognito Authorization or token headers to S3
+      if (key.toLowerCase() !== 'authorization' && value != null) {
+        headers[key] = String(value);
+      }
+    }
   }
 
   let res;

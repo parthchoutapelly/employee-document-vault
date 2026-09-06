@@ -60,6 +60,12 @@ class TestUploadHandler(unittest.TestCase):
         self.assertIn("upload_url", body)
         self.assertEqual(body["s3_key"], "documents/EMP-001/offer_letter/offer.pdf")
 
+        # Verify KMS headers returned
+        self.assertIn("required_headers", body)
+        self.assertEqual(body["required_headers"]["x-amz-server-side-encryption"], "aws:kms")
+        self.assertEqual(body["required_headers"]["x-amz-server-side-encryption-aws-kms-key-id"], "alias/docvault-dev")
+        self.assertEqual(body["upload_headers"], body["required_headers"])
+
         # Verify DynamoDB metadata write
         res["documents_table"].put_item.assert_called_once()
         saved_item = res["documents_table"].put_item.call_args[1]["Item"]
@@ -74,6 +80,19 @@ class TestUploadHandler(unittest.TestCase):
         self.assertEqual(audit_item["result"], "SUCCESS")
         self.assertEqual(audit_item["caller_user_id"], "EMP-001")
         self.assertEqual(audit_item["target_employee_id"], "EMP-001")
+
+    def test_upload_without_kms_key_returns_empty_headers(self):
+        res = make_mock_resources()
+        res["kms_key_id"] = None
+        event = {
+            "requestContext": {"authorizer": {"claims": make_claims("EMP-001", ["Employee"])}},
+            "body": json.dumps({"filename": "plain.pdf", "document_type": "other"}),
+        }
+        resp = upload_handler(event, None, resources=res)
+        self.assertEqual(resp["statusCode"], 201)
+        body = json.loads(resp["body"])
+        self.assertEqual(body["required_headers"], {})
+        self.assertEqual(body["upload_headers"], {})
 
     def test_upload_key_convention(self):
         res = make_mock_resources()

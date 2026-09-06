@@ -145,6 +145,48 @@ describe('DocumentUpload component', () => {
     expect(screen.queryByTestId('upload-file-preview')).not.toBeInTheDocument()
   })
 
+  it('passes required KMS headers to uploadFileToPresignedUrl when returned by requestUpload', async () => {
+    const validFile = new File(['dummy binary data'], 'career_resume.pdf', {
+      type: 'application/pdf',
+    })
+    const requiredHeaders = {
+      'x-amz-server-side-encryption': 'aws:kms',
+      'x-amz-server-side-encryption-aws-kms-key-id': '40ee685d-515e-48b4-891f-6142ff9c97e2',
+    }
+    vi.spyOn(api, 'requestUpload').mockResolvedValue({
+      document_id: 'new-doc-kms',
+      upload_url: MOCK_PRESIGNED_URL,
+      s3_key: 'documents/EMP-001/resume/career_resume.pdf',
+      expires_in: 900,
+      required_headers: requiredHeaders,
+    })
+
+    renderDocumentUpload({
+      employeeId: 'EMP-001',
+      role: 'Employee',
+    })
+
+    const select = screen.getByTestId('upload-type-select')
+    fireEvent.change(select, { target: { value: 'resume' } })
+
+    const fileInput = screen.getByTestId('upload-file-input')
+    fireEvent.change(fileInput, { target: { files: [validFile] } })
+
+    const submitBtn = screen.getByTestId('upload-submit-btn')
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => {
+      expect(api.uploadFileToPresignedUrl).toHaveBeenCalledWith(
+        MOCK_PRESIGNED_URL,
+        validFile,
+        requiredHeaders
+      )
+      expect(screen.getByTestId('upload-success')).toHaveTextContent(
+        '"career_resume.pdf" uploaded successfully.'
+      )
+    })
+  })
+
   it('surfaces S3 upload failure and does not report success or refresh list', async () => {
     const onUploadSuccessMock = vi.fn()
     vi.spyOn(api, 'uploadFileToPresignedUrl').mockRejectedValue(

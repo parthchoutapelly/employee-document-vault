@@ -128,12 +128,20 @@ def handler(event: Dict[str, Any], context: Any, resources: Optional[Dict[str, A
             cognito_sub=caller.get("sub", "UNKNOWN"),
         )
 
+        # 7. Build required signed upload headers
+        required_headers: Dict[str, str] = {}
+        if kms_key_id:
+            required_headers["x-amz-server-side-encryption"] = "aws:kms"
+            required_headers["x-amz-server-side-encryption-aws-kms-key-id"] = kms_key_id
+
         return success(
             {
                 "document_id": document_id,
                 "upload_url": upload_url,
                 "s3_key": s3_key,
                 "expires_in": 900,
+                "required_headers": required_headers,
+                "upload_headers": required_headers,
             },
             status_code=201,
         )

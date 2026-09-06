@@ -114,8 +114,13 @@ export default function DocumentUpload({ onUploadSuccess }) {
         throw new Error('Upload initialization failed: no upload URL returned by server.')
       }
 
-      // Step 2: Direct-to-S3 PUT using the presigned URL
-      await uploadFileToPresignedUrl(meta.upload_url, selectedFile)
+      // Step 2: Direct-to-S3 PUT using the presigned URL and required signed KMS headers
+      const uploadHeaders = meta?.required_headers || meta?.upload_headers;
+      if (uploadHeaders && Object.keys(uploadHeaders).length > 0) {
+        await uploadFileToPresignedUrl(meta.upload_url, selectedFile, uploadHeaders);
+      } else {
+        await uploadFileToPresignedUrl(meta.upload_url, selectedFile);
+      }
 
       // Step 3: Success state & list refresh
       setSuccessMessage(`"${selectedFile.name}" uploaded successfully.`)

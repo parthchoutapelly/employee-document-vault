@@ -1,7 +1,8 @@
-# Runtime dependencies for the shared authorization layer.
-# boto3 is available in the Lambda runtime by default; listed here for
-# local development and for any Lambda layer build process.
-boto3>=1.34.0
+# Production dependencies for Employee Document Vault Lambda functions
+# Pinned for reproducibility and AWS Lambda Python 3.11 runtime compatibility
+boto3==1.34.162
+botocore==1.34.162
+aws-xray-sdk==2.14.0
 
 # -----------------------------------------------------------------------
 # Development / test dependencies (NOT included in Lambda layer)

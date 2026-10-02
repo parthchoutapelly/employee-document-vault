@@ -18,6 +18,10 @@ Parameters:
 Conditions:
   IsProd: !Equals [!Ref Env, "prod"]
 
+Globals:
+  Function:
+    Tracing: Active
+
 Resources:
 
   # ---------------------------------------------------------------------
@@ -388,9 +392,14 @@ Resources:
     Properties:
       Name: !Sub "docvault-api-${Env}"
       StageName: v1
-      TracingEnabled: false
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: "OFF"
+          DataTraceEnabled: false
+          MetricsEnabled: true
       Auth:
-        DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
           CognitoAuthorizer:
             UserPoolArn: !GetAtt DocVaultUserPool.Arn
@@ -406,6 +415,8 @@ Resources:
             get:
               summary: Unauthenticated infrastructure health probe
               security: []
+              x-amazon-apigateway-auth:
+                type: "NONE"
               responses:
                 '200':
                   description: Service is reachable
@@ -573,7 +584,7 @@ Resources:
               Effect: Allow
               Action:
                 - s3:PutObject
-              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/*"
+              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/documents/*"
             - Sid: KmsEncrypt
               Effect: Allow
               Action:
@@ -678,7 +689,7 @@ Resources:
               Action:
                 - s3:GetObject
                 - s3:GetObjectVersion
-              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/*"
+              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/documents/*"
             - Sid: KmsDecrypt
               Effect: Allow
               Action:
@@ -735,7 +746,7 @@ Resources:
               Effect: Allow
               Action:
                 - s3:DeleteObject
-              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/*"
+              Resource: !Sub "arn:aws:s3:::${DocumentsBucket}/documents/*"
       Events:
         DeleteApi:
           Type: Api
@@ -883,6 +894,346 @@ Resources:
       Tags:
         Project: employee-document-vault
         Environment: !Ref Env
+
+  # =====================================================================
+  # Observability & Monitoring: CloudWatch Alarms & Dashboard
+  # =====================================================================
+
+  DocVaultApiP95LatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "docvault-apigw-p95-latency-${Env}"
+      AlarmDescription: "Alerts when API Gateway p95 latency exceeds 1000ms for 2 consecutive 5-minute periods"
+      Namespace: AWS/ApiGateway
+      MetricName: Latency
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub "docvault-api-${Env}"
+        - Name: Stage
+          Value: v1
+      ExtendedStatistic: p95
+      Period: 300
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  DocVaultLambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "docvault-lambda-error-rate-${Env}"
+      AlarmDescription: "Alerts when aggregate Lambda error rate exceeds 5% for 2 consecutive 5-minute periods"
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 5.0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Metrics:
+        - Id: e1
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref UploadFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: e2
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref ListFilesFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: e3
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DownloadFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: e4
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DeleteFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: e5
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Errors
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref ActivityFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: i1
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref UploadFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: i2
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref ListFilesFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: i3
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DownloadFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: i4
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref DeleteFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: i5
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Invocations
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref ActivityFunction
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: errors
+          Expression: "FILL(e1,0) + FILL(e2,0) + FILL(e3,0) + FILL(e4,0) + FILL(e5,0)"
+          ReturnData: false
+        - Id: invocations
+          Expression: "FILL(i1,0) + FILL(i2,0) + FILL(i3,0) + FILL(i4,0) + FILL(i5,0)"
+          ReturnData: false
+        - Id: error_rate
+          Expression: "IF(invocations > 0, (errors / invocations) * 100, 0)"
+          Label: "Aggregate Lambda Fleet Error Rate (%)"
+          ReturnData: true
+
+  DocVaultOverviewDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "docvault-overview-${Env}"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "API Gateway Request Volume & Errors",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", "ApiName", "docvault-api-${Env}", "Stage", "v1", {"stat": "Sum", "label": "Total Requests"}],
+                  ["AWS/ApiGateway", "4XXError", "ApiName", "docvault-api-${Env}", "Stage", "v1", {"stat": "Sum", "color": "#ff7f0e", "label": "4XX Errors"}],
+                  ["AWS/ApiGateway", "5XXError", "ApiName", "docvault-api-${Env}", "Stage", "v1", {"stat": "Sum", "color": "#d62728", "label": "5XX Errors"}]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "API Gateway Latency Percentiles (ms)",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/ApiGateway", "Latency", "ApiName", "docvault-api-${Env}", "Stage", "v1", {"stat": "Average", "label": "Average"}],
+                  ["AWS/ApiGateway", "Latency", "ApiName", "docvault-api-${Env}", "Stage", "v1", {"stat": "p90", "label": "p90"}],
+                  ["AWS/ApiGateway", "Latency", "ApiName", "docvault-api-${Env}", "Stage", "v1", {"stat": "p95", "color": "#e377c2", "label": "p95"}],
+                  ["AWS/ApiGateway", "Latency", "ApiName", "docvault-api-${Env}", "Stage", "v1", {"stat": "p99", "color": "#d62728", "label": "p99"}]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Lambda Fleet Invocations",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${UploadFunction}", {"stat": "Sum", "label": "Upload"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${ListFilesFunction}", {"stat": "Sum", "label": "ListFiles"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${DownloadFunction}", {"stat": "Sum", "label": "Download"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${DeleteFunction}", {"stat": "Sum", "label": "Delete"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${UpdateTagsFunction}", {"stat": "Sum", "label": "UpdateTags"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${VersionsFunction}", {"stat": "Sum", "label": "Versions"}],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${ActivityFunction}", {"stat": "Sum", "label": "Activity"}]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Lambda Fleet Errors",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/Lambda", "Errors", "FunctionName", "${UploadFunction}", {"stat": "Sum", "label": "Upload"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${ListFilesFunction}", {"stat": "Sum", "label": "ListFiles"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${DownloadFunction}", {"stat": "Sum", "label": "Download"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${DeleteFunction}", {"stat": "Sum", "label": "Delete"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${UpdateTagsFunction}", {"stat": "Sum", "label": "UpdateTags"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${VersionsFunction}", {"stat": "Sum", "label": "Versions"}],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${ActivityFunction}", {"stat": "Sum", "label": "Activity"}]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Lambda Execution Duration p95 (ms)",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/Lambda", "Duration", "FunctionName", "${UploadFunction}", {"stat": "p95", "label": "Upload p95"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${ListFilesFunction}", {"stat": "p95", "label": "ListFiles p95"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${DownloadFunction}", {"stat": "p95", "label": "Download p95"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${DeleteFunction}", {"stat": "p95", "label": "Delete p95"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${UpdateTagsFunction}", {"stat": "p95", "label": "UpdateTags p95"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${VersionsFunction}", {"stat": "p95", "label": "Versions p95"}],
+                  ["AWS/Lambda", "Duration", "FunctionName", "${ActivityFunction}", {"stat": "p95", "label": "Activity p95"}]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Lambda Throttles",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/Lambda", "Throttles", "FunctionName", "${UploadFunction}", {"stat": "Sum", "label": "Upload"}],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "${ListFilesFunction}", {"stat": "Sum", "label": "ListFiles"}],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "${DownloadFunction}", {"stat": "Sum", "label": "Download"}],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "${DeleteFunction}", {"stat": "Sum", "label": "Delete"}],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "${UpdateTagsFunction}", {"stat": "Sum", "label": "UpdateTags"}],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "${VersionsFunction}", {"stat": "Sum", "label": "Versions"}],
+                  ["AWS/Lambda", "Throttles", "FunctionName", "${ActivityFunction}", {"stat": "Sum", "label": "Activity"}]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 18,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "DynamoDB Consumed Capacity Units",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "Documents-${Env}", {"stat": "Sum", "label": "Documents Read"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "Documents-${Env}", {"stat": "Sum", "label": "Documents Write"}],
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "Employees-${Env}", {"stat": "Sum", "label": "Employees Read"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "Employees-${Env}", {"stat": "Sum", "label": "Employees Write"}],
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "AuditLog-${Env}", {"stat": "Sum", "label": "AuditLog Read"}],
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "AuditLog-${Env}", {"stat": "Sum", "label": "AuditLog Write"}]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 18,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "DynamoDB Throttles & S3 Activity",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "metrics": [
+                  ["AWS/DynamoDB", "ReadThrottleEvents", "TableName", "Documents-${Env}", {"stat": "Sum", "label": "Documents Read Throttles"}],
+                  ["AWS/DynamoDB", "WriteThrottleEvents", "TableName", "Documents-${Env}", {"stat": "Sum", "label": "Documents Write Throttles"}],
+                  ["AWS/DynamoDB", "ReadThrottleEvents", "TableName", "AuditLog-${Env}", {"stat": "Sum", "label": "AuditLog Read Throttles"}],
+                  ["AWS/DynamoDB", "WriteThrottleEvents", "TableName", "AuditLog-${Env}", {"stat": "Sum", "label": "AuditLog Write Throttles"}],
+                  ["AWS/S3", "AllRequests", "BucketName", "${DocumentsBucket}", "FilterId", "EntireBucket", {"stat": "Sum", "label": "S3 All Requests", "yAxis": "right"}]
+                ]
+              }
+            }
+          ]
+        }
 
 Outputs:
   DocumentsBucketName:
